@@ -37,7 +37,7 @@ int main() {
                 manager.dispatchRobot(1, { 14, 9 });
             }
             else if (key == 'm' || key == 'M') {
-                cout << "[指令] 机器人 2 号前往出货点 (13, 9)" << endl;
+                cout << "[指令] 机器人 2 号前往货架区 (13, 9)" << endl;
                 manager.dispatchRobot(2, { 13, 9 });
             }
             else if (key == 27) { // ESC 键
