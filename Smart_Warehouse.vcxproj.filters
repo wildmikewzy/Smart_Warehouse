@@ -1,0 +1,56 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="源文件">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="头文件">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="主函数">
+      <UniqueIdentifier>{a2d87613-9dc0-4642-8cd8-e0ffc9b7f5c7}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="source_file\GUI.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="source_file\Map.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="source_file\Robot.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="source_file\Router.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="source_file\WarehouseManager.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="source_file\main.cpp">
+      <Filter>主函数</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="source_file\common.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="source_file\GUI.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="source_file\Map.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="source_file\Robot.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="source_file\Router.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="source_file\WarehouseManager.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
