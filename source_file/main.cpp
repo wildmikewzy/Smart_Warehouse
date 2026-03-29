@@ -13,8 +13,8 @@ int main() {
     cout << "   Smart_Warehouse 项目启动测试程序" << endl;
     cout << "========================================" << endl;
     cout << "操作说明：" << endl;
-    cout << "  [N] : 发送测试订单 (机器人1号前往 14,9)" << endl;
-    cout << "  [M] : 发送测试订单 (机器人2号前往 13,9)" << endl;
+    cout << "  [N] : 发送测试订单 (机器人1号前往 7,9)" << endl;
+    cout << "  [M] : 发送测试订单 (机器人2号前往 8,9)" << endl;
     cout << "  [ESC] : 退出系统" << endl;
     cout << "----------------------------------------" << endl;
 
@@ -33,12 +33,12 @@ int main() {
         if (_kbhit()) {     //_kbhit() 函数用于检查控制台窗口是否有按键被按下
             char key = _getch();       // _getch() 函数是一个用于从控制台读取单个字符的函数，但它不会在屏幕上显示该字符。
             if (key == 'n' || key == 'N') {
-                cout << "[指令] 机器人 1 号前往货架区 (14, 9)" << endl;
-                manager.dispatchRobot(1, { 14, 9 });
+                cout << "[指令] 机器人 1 号前往货架区 (7, 9)" << endl;
+                manager.dispatchRobot(1, { 7, 9 });
             }
             else if (key == 'm' || key == 'M') {
-                cout << "[指令] 机器人 2 号前往货架区 (13, 9)" << endl;
-                manager.dispatchRobot(2, { 13, 9 });
+                cout << "[指令] 机器人 2 号前往货架区 (8, 9)" << endl;
+                manager.dispatchRobot(2, { 8, 9 });
             }
             else if (key == 27) { // ESC 键
                 isRunning = false;
