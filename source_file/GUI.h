@@ -8,7 +8,7 @@
 class GUI {
 private:
     int screenLength;        //屏幕长度
-    int screenWideth;       //屏幕宽度s
+    int screenWideth;       //屏幕宽度
 
 public:
     GUI(int l, int w);          //构造函数，初始化屏幕尺寸

@@ -5,10 +5,11 @@
 #include "Map.h"
 #include "Router.h"
 #include <vector>
+using namespace std;
 
 class WarehouseManager {
 private:
-    std::vector<Robot> robots;      //管理的机器人列表
+    vector<Robot> robots;      //管理的机器人列表
     Map warehouseMap;           //仓库的地图数据
 
 public:
@@ -18,6 +19,6 @@ public:
     void updateAll();       // 每帧逻辑更新
 
     // 供 GUI 调用，获取数据进行绘制
-    const std::vector<Robot>& getRobots() const { return robots; }      //获取机器人列表
+    const vector<Robot>& getRobots() const { return robots; }      //获取机器人列表
     const Map& getMap() const { return warehouseMap; }      //获取地图数据
 };

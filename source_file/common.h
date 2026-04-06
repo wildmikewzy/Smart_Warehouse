@@ -1,4 +1,3 @@
-/*大家的“共同语言，所有文件都会用到的东西放在这里*/
 #pragma once
 #include <vector>
 

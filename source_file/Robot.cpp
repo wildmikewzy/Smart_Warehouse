@@ -11,7 +11,7 @@ void Robot::setPath(const std::vector<Point>& newPath) {            // 接收 Rout
 void Robot::update() {          //每帧调用一次，处理移动逻辑
     if (status == RobotStatus::MOVING && !pathQueue.empty()) {
         // 简单的逻辑：每调用一次，取路径中的下一个点
-        // 任务：在这里需要实现平滑移动动画，而不是瞬间跳格
+        // 逻辑控制员-李忱刚任务：在这里需要实现平滑移动动画，而不是瞬间跳格（下面的代码是直接跳格的临时逻辑）
         currentPos = pathQueue.front();
         pathQueue.erase(pathQueue.begin());
 

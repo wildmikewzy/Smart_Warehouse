@@ -11,8 +11,8 @@ GUI::~GUI() {
 }
 
 void GUI::render(const WarehouseManager& manager) {
-    cleardevice();
-    drawGrid();
+    cleardevice();      //清屏函数
+    drawGrid();         //画网格线
 
     // 画地图上的障碍物
     manager.getMap().draw();
@@ -26,7 +26,7 @@ void GUI::render(const WarehouseManager& manager) {
         fillcircle(px, py, GRID_SIZE / 3);
     }
 
-    drawStatusPanel(manager.getRobots());
+    drawStatusPanel(manager.getRobots());           //画出状态面板，显示每个机器人对应的状态（空闲、移动、装在、错误...）
 }
 
 void GUI::drawGrid() {
@@ -41,4 +41,5 @@ void GUI::drawStatusPanel(const std::vector<Robot>& robots) {
     settextcolor(BLACK);
     outtextxy(MAP_LENGTH * GRID_SIZE + 20, 20, "Smart_Warehouse 系统");
     // 可以在这里循环显示 robots 的状态...
+
 }

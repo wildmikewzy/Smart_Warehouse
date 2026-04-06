@@ -1,8 +1,8 @@
 #include "Map.h"
-#include <graphics.h>
+#include <graphics.h>       // 引入 EasyX 图形库头文件，提供绘图功能
 
 /**
- * @brief Map的构造函数：初始化地图，将所有格子设为空地 (0)
+ * @brief ：Map的构造函数：初始化地图，将所有格子设为空地 (0)
  */
 Map::Map() {
     for (int i = 0; i < MAP_LENGTH; i++) {

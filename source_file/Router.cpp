@@ -1,12 +1,14 @@
 /*核心的算法接口*/
 #include "Router.h"
+#include <vector>
+using namespace std;
 
-std::vector<Point> Router::getPath(Point start, Point end, const Map& map) {        //输入起点和重点，并传入地图，函数返回路径点序列
-    std::vector<Point> path;       //存放路径点向量
+vector<Point> Router::getPath(Point start, Point end, const Map& map) {        //输入起点和重点，并传入地图，函数返回路径点序列
+    vector<Point> path;       //存放路径点向量
 
-    // TODO:  算法工程师需要在这里实现 A* 算法
+    // TODO:  算法工程师需要在这里实现Dijkstra算法，根据地图数据计算出从起点到重点的路径，并将路径点以此加入到path向量中。
 
     // 目前先写一个“临时逻辑”：直接瞬移到终点，保证程序能跑通
-    path.push_back(end);
+    path.push_back(end);        //直接把终点加入到路径里面，模拟瞬间移动到重点的效果。
     return path;
 }
