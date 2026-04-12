@@ -12,7 +12,7 @@ struct Node {
     //刻画从起点到当前点的量度代价g
     int dist;
     //C++优先排列大顶堆，我们算路径要小顶堆，重载大于运算符来定义比较Node
-    bool operator>(const Node& other)const {
+    bool operator > (const Node& other)const {
         return dist > other.dist;
     }
 };
@@ -30,12 +30,11 @@ vector<Point> Router::getPath(Point start, Point end, const Map& map) {        /
 
     //2.初始化数据结构 distMap记录最短距离，parentMap父节点记录来回溯行走路径
     //dist距离表
-    std::vector<std::vector<int>>dist(MAP_LENGTH, std::vector<int>(MAP_WIDTH, INT_MAX));
+    vector<vector<int>>dist(MAP_LENGTH, vector<int>(MAP_WIDTH, INT_MAX));
     //parent路径表
-    std::vector<std::vector<Point>>parent(MAP_LENGTH, std::vector<Point>(MAP_WIDTH, { -1,-1 }));
+    vector<vector<Point>>parent(MAP_LENGTH, vector<Point>(MAP_WIDTH, { -1,-1 }));
     //pq优先的队列
-    std::priority_queue<Node, std::vector<Node>, std::greater<Node>>pq;
-
+    priority_queue<Node, vector<Node>, greater<Node>>pq;
     //起点初始化
     dist[start.x][start.y] = 0;
     pq.push({ start,0 });
@@ -93,7 +92,7 @@ vector<Point> Router::getPath(Point start, Point end, const Map& map) {        /
             temp = parent[temp.x][temp.y];//当前点变成上一个点再次循环
         }
         //反转倒着循环的路径，正向显示运动路径
-        std::reverse(path.begin(), path.end());
+        reverse(path.begin(), path.end());
         //起点不需要再走
         if (!path.empty())path.erase(path.begin());
 
