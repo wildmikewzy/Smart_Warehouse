@@ -1,18 +1,18 @@
 /*机器人动态逻辑接口*/
 #include "Robot.h"
 
-Robot::Robot(int _id, Point start)
+Robot::Robot(int _id, Point start)          //Robot对象的构造函数，接受一个ID和起始位置，并初始化状态为IDLE（空闲）
     : id(_id), currentPos(start), status(RobotStatus::IDLE) {
     realX = start.x;
     realY = start.y;
 }   //构造函数，初始化机器人的状态和位置
 
-void Robot::setPath(const std::vector<Point>& newPath) {      // 接收 Router 给的路径，更新状态
+void Robot::setPath(const std::vector<Point>& newPath) {      // 接收 Router 给的路径，更新机器人的状态为 MOVING（移动中），并将路径存入 pathQueue
     pathQueue = newPath;
     if (!pathQueue.empty()) status = RobotStatus::MOVING;
 }
 
-void Robot::update() {
+void Robot::update() {      //移动更新处理
     if (status == RobotStatus::MOVING && !pathQueue.empty()) {
         Point target = pathQueue.front();
 
@@ -39,8 +39,11 @@ void Robot::update() {
             currentPos = target;    // 强行对齐到格点
             pathQueue.erase(pathQueue.begin()); // 前往路径序列的下一个点
         }
-
-        // 到达终点判定-空闲
+        //记录轨迹：
+        if (historyPath.empty() || !(historyPath.back() == currentPos)) {
+            historyPath.push_back(currentPos);
+        }
+        // 判定到达终点后，机器人的状态变为空闲
         if (pathQueue.empty()) status = RobotStatus::IDLE;
     }
 }

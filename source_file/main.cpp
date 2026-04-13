@@ -34,7 +34,7 @@ int main() {
             char key = _getch();       // _getch() 函数是一个用于从控制台读取单个字符的函数，但它不会在屏幕上显示该字符。
             if (key == 'n' || key == 'N') {
                 cout << "[指令] 机器人 1 号前往货架区 (12, 9)" << endl;
-                manager.dispatchRobot(1, { 12, 9 });
+                manager.dispatchRobot(1, { 12, 9 });       
             }
             else if (key == 'm' || key == 'M') {
                 cout << "[指令] 机器人 2 号前往货架区 (8, 9)" << endl;
