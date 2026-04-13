@@ -30,7 +30,7 @@ vector<Point> Router::getPath(Point start, Point end, const Map& map) {        /
 
     //2.初始化数据结构 distMap记录最短距离，parentMap父节点记录来回溯行走路径
     //dist距离表
-    vector<vector<int>>dist(MAP_LENGTH, vector<int>(MAP_WIDTH, INT_MAX));
+    std::vector<std::vector<int>>dist(MAP_LENGTH, std::vector<int>(MAP_WIDTH, INT_MAX));
     //parent路径表
     vector<vector<Point>>parent(MAP_LENGTH, vector<Point>(MAP_WIDTH, { -1,-1 }));
     //pq优先的队列

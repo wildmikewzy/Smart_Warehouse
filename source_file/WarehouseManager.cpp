@@ -1,5 +1,5 @@
 #include "WarehouseManager.h"
-
+#include <iostream>
 WarehouseManager::WarehouseManager() {
     setupScene();
 }
@@ -11,7 +11,12 @@ void WarehouseManager::setupScene() {
 
     // 放置一个出货点 (类型2)
     warehouseMap.setObstacle(15, 15, 2);
-
+    //设置障碍物
+    warehouseMap.setObstacle(5, 5, 1);
+    warehouseMap.setObstacle(5, 6, 1);
+	warehouseMap.setObstacle(4, 9, 1);
+    warehouseMap.setObstacle(5, 14, 1);
+    warehouseMap.setObstacle(5, 15, 1);
     // 初始化机器人位置
     robots.push_back(Robot(1, { 2, 2 }));
     robots.push_back(Robot(2, { 2, 17 }));
@@ -23,6 +28,14 @@ void WarehouseManager::dispatchRobot(int robotId, Point targetGrid) {       //给
             // 调用 Router 获取路径
             std::vector<Point> path = Router::getPath(r.currentPos, targetGrid, warehouseMap);
             r.setPath(path);
+
+            // 在控制台输出路径坐标
+            cout << "机器人 " << robotId << " 的路径: ";
+            for (const auto& p : path) {
+                cout << "(" << p.x << "," << p.y << ") ";
+            }
+            cout << std::endl;
+
             break;
         }
     }
