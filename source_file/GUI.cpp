@@ -19,6 +19,20 @@ void GUI::render(const WarehouseManager& manager) {
 
     // 画机器人
     for (const auto& r : manager.getRobots()) {
+        // --- 绘制机器人的轨迹线 ---
+        if (r.historyPath.size() > 1) {
+            setlinecolor(r.id == 1 ? LIGHTBLUE : LIGHTRED); // 根据机器人 ID 区分轨迹颜色
+            setlinestyle(PS_DOT, 2); // 使用虚线表示轨迹
+
+            for (size_t i = 0; i < r.historyPath.size() - 1; i++) {
+                // 将网格坐标转换为像素中心点坐标
+                int x1 = r.historyPath[i].x * GRID_SIZE + GRID_SIZE / 2;
+                int y1 = r.historyPath[i].y * GRID_SIZE + GRID_SIZE / 2;
+                int x2 = r.historyPath[i + 1].x * GRID_SIZE + GRID_SIZE / 2;
+                int y2 = r.historyPath[i + 1].y * GRID_SIZE + GRID_SIZE / 2;
+                line(x1, y1, x2, y2);
+            }
+        }
         setfillcolor(r.id == 1 ? BLUE : RED);
         // 将网格坐标转为像素坐标并居中
         int px = r.currentPos.x * GRID_SIZE + GRID_SIZE / 2;

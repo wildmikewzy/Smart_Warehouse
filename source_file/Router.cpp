@@ -12,7 +12,7 @@ struct Node {
     //刻画从起点到当前点的量度代价g
     int dist;
     //C++优先排列大顶堆，我们算路径要小顶堆，重载大于运算符来定义比较Node
-    bool operator>(const Node& other)const {
+    bool operator > (const Node& other)const {
         return dist > other.dist;
     }
 };
@@ -29,7 +29,7 @@ vector<Point> Router::getPath(Point start, Point end, const Map& map) {        /
     }
 
     //2.初始化数据结构 distMap记录最短距离，parentMap父节点记录来回溯行走路径
-    //dist距离表
+    //dist距离表，初始每个格子的数值都填入无穷大（除了起点之外）
     std::vector<std::vector<int>>dist(MAP_LENGTH, std::vector<int>(MAP_WIDTH, INT_MAX));
     //parent路径表
     std::vector<std::vector<Point>>parent(MAP_LENGTH, std::vector<Point>(MAP_WIDTH, { -1,-1 }));
