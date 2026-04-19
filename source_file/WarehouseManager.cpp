@@ -20,16 +20,11 @@ void WarehouseManager::setupScene() {
 	warehouseMap.setObstacle(4, 9, 1);
     warehouseMap.setObstacle(5, 14, 1);
     warehouseMap.setObstacle(5, 15, 1);
-    warehouseMap.setObstacle(2, 16, 1);
-    warehouseMap.setObstacle(1, 17, 1);
-    warehouseMap.setObstacle(2, 18, 1);
-    warehouseMap.setObstacle(3, 17, 1);
     // 初始化机器人位置
     robots.push_back(Robot(1, { 2, 2 }));
     robots.push_back(Robot(2, { 2, 17 }));
     robots.push_back(Robot(3, { 5, 8 }));
-	robots.push_back(Robot(4, { 6, 9 }));
-	robots.push_back(Robot(5, { 5, 7 }));
+	robots.push_back(Robot(4, { 5, 7 }));
 }
 /**
 * @brief 调度机器人函数
