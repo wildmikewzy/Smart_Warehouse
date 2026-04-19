@@ -7,17 +7,19 @@ GUI::GUI(int l, int w) : screenLength(l), screenWideth(w) {
 
     // 初始化按钮位置（放在状态栏下方）
 	int panelX = MAP_LENGTH * GRID_SIZE + 20;       //统一状态栏和按钮的X坐标
-    btn1 = { panelX, 200, 160, 40, false, "分派机器人1号" };
-    btn2 = { panelX, 270, 160, 40, false, "分派机器人2号" };
+    btn1 = { panelX, 400, 160, 40, false, "分派机器人1号" };
+    btn2 = { panelX, 450, 160, 40, false, "分派机器人2号" };
 }
 
 GUI::~GUI() {
     closegraph();
 }
-
+/**
+* @brief 渲染
+*/
 void GUI::render(const WarehouseManager& manager) {
-    cleardevice();
-    drawGrid();
+	cleardevice();      // 清屏函数
+	drawGrid();         // 画网格线
 
     // 画地图上的障碍物
     manager.getMap().draw();
@@ -26,10 +28,10 @@ void GUI::render(const WarehouseManager& manager) {
     for (const auto& r : manager.getRobots()) {
         // --- 绘制机器人的轨迹线 ---
         if (r.historyPath.size() > 1) {
-            setlinecolor(r.id == 1 ? LIGHTBLUE : LIGHTRED);
+			setlinecolor(r.id % 2 == 0 ? LIGHTBLUE : LIGHTRED);     // 根据机器人ID 其路径选择不同的颜色，偶数ID使用浅蓝色，奇数ID使用浅红色
             setlinestyle(PS_DOT, 2);
 
-            for (size_t i = 0; i < r.historyPath.size() - 1; i++) {
+			for (size_t i = 0; i < r.historyPath.size() - 1; i++) {     // 将历史路径点转换为像素坐标并绘制线段
                 int x1 = static_cast<int>(r.historyPath[i].x) * GRID_SIZE + GRID_SIZE / 2;
                 int y1 = static_cast<int>(r.historyPath[i].y) * GRID_SIZE + GRID_SIZE / 2;
                 int x2 = static_cast<int>(r.historyPath[i + 1].x) * GRID_SIZE + GRID_SIZE / 2;
@@ -37,10 +39,19 @@ void GUI::render(const WarehouseManager& manager) {
                 line(x1, y1, x2, y2);
             }
         }
-        setfillcolor(r.id == 1 ? BLUE : RED);
+        //绘制机器人圆形本体
+        setfillcolor(r.id % 2 == 0 ? BLUE : RED);     // 根据机器人ID选择不同的颜色，偶数ID使用蓝色，奇数ID使用红色
         int px = static_cast<int>(r.currentPos.x) * GRID_SIZE + GRID_SIZE / 2;
         int py = static_cast<int>(r.currentPos.y) * GRID_SIZE + GRID_SIZE / 2;
-        fillcircle(px, py, GRID_SIZE / 3);
+		fillcircle(px, py, GRID_SIZE / 3);      // 绘制机器人主体圆形
+        //==绘制机器人编号==
+		char idStr[10];
+		sprintf_s(idStr, "%d", r.id);       //数字转字符串，准备绘制在机器人上
+		settextcolor(WHITE);        // 设置文本颜色为白色，以便在机器人圆形上清晰显示
+		setbkmode(TRANSPARENT);     // 设置文本背景模式为透明，这样文本不会覆盖机器人圆形的颜色
+        settextstyle(16, 0, _T("微软雅黑"));        //设置字体和大小
+		outtextxy(px-5, py-8, _T(idStr));     // 在机器人圆形上方绘制编号文本    
+
     }
 
     drawStatusPanel(manager.getRobots());
@@ -72,11 +83,12 @@ void GUI::drawStatusPanel(const std::vector<Robot>& robots) {
     for (const auto& r : robots) {
         std::string statusStr;
         switch (r.status) {
-        case RobotStatus::IDLE:    statusStr = "空闲"; break;
-        case RobotStatus::MOVING:  statusStr = "移动中"; break;
-        case RobotStatus::LOADING: statusStr = "装载"; break;
-        case RobotStatus::ERROR_:  statusStr = "错误"; break;
-        default:                   statusStr = "未知"; break;
+            case RobotStatus::IDLE:    statusStr = "空闲"; break;
+		    case RobotStatus::PREPARING: statusStr = "准备中"; break;
+            case RobotStatus::MOVING:  statusStr = "移动中"; break;
+            case RobotStatus::LOADING: statusStr = "装载"; break;
+            case RobotStatus::ERROR_:  statusStr = "错误"; break;
+            default:statusStr = "未知"; break;
         }
 
         char infoLine1[100];
@@ -84,7 +96,7 @@ void GUI::drawStatusPanel(const std::vector<Robot>& robots) {
         sprintf_s(infoLine1, "ID: %d   位置: (%.2f, %.2f)", r.id, r.currentPos.x, r.currentPos.y);
         sprintf_s(infoLine2, "状态: %s", statusStr.c_str());
 
-        settextcolor(r.id == 1 ? BLUE : RED);
+        settextcolor(r.id % 2 == 0 ? BLUE : RED);
         outtextxy(panelX, yOffset, _T(infoLine1));
         yOffset += 22;
         outtextxy(panelX, yOffset, _T(infoLine2));
@@ -102,12 +114,12 @@ void GUI::drawButtons() {
         setfillcolor(btn.isPressed ? RGB(180, 180, 180) : baseColor);
         
         // 如果按下，将其坐标轻微偏移做出真正的按压感
-        int offset = btn.isPressed ? 2 : 0;
+		int offset = btn.isPressed ? 2 : 0;     // offset 用于模拟按钮被按下时的视觉效果,当按钮被按下时，offset 为 2，使按钮稍稍偏移一点看起来被按压了；否则为 0，保持正常位置。
         fillrectangle(btn.x + offset, btn.y + offset, btn.x + btn.width + offset, btn.y + btn.height + offset);
         
         settextcolor(BLACK);
         settextstyle(16, 0, _T("宋体"));
-        // 居中计算（简易版）
+		// 居中计算文本位置，简单起见这里直接加了固定偏移
         outtextxy(btn.x + 15 + offset, btn.y + 12 + offset, btn.text.c_str());
     };
 
@@ -143,8 +155,8 @@ void GUI::handleMouseClick(WarehouseManager& manager) {
         // 处理鼠标松开
         else if (msg.uMsg == WM_LBUTTONUP) {
             if (btn1.isPressed && btn1.contains(msg.x, msg.y)) {
-                std::cout << "[UI交互] 点击按钮：机器人 1 号前往货架区 (7, 9)" << std::endl;
-                manager.dispatchRobot(1, { 7, 9 });
+                std::cout << "[UI交互] 点击按钮：机器人 1 号前往货架区 (6, 9)" << std::endl;
+                manager.dispatchRobot(1, { 6, 9 });
             }
             if (btn2.isPressed && btn2.contains(msg.x, msg.y)) {
                 std::cout << "[UI交互] 点击按钮：机器人 2 号前往货架区 (8, 9)" << std::endl;

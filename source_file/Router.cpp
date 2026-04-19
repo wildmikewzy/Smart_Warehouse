@@ -9,7 +9,7 @@ using namespace std;
 //内部辅助的结构体，用来优先队列排序
 struct Node {
     Point pt;
-    //刻画从起点到当前点的量度代价g
+    //刻画从起点到当前点的量度代价
     int dist;
     //C++优先排列大顶堆，我们算路径要小顶堆，重载大于运算符来定义比较Node
     bool operator > (const Node& other)const {
@@ -98,6 +98,7 @@ vector<Point> Router::getPath(Point start, Point end, const Map& map) {        /
         if (!path.empty())path.erase(path.begin());
 
     }
-    path.push_back(end); 
+	if (!path.empty())       //只有当有路可走的时候才把终点加入路径，否则返回空路径
+        path.push_back(end); 
     return path;
 }

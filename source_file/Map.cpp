@@ -57,7 +57,7 @@ void Map::draw() const {
                 setfillcolor(RGB(144, 238, 144));
                 solidrectangle(left + 1, top + 1, right - 1, bottom - 1);
             }
-            // 0 是空地，通常由 GUI::drawGrid() 画出的背景处理，这里可以不画
+            // 0 是空地，由 GUI::drawGrid() 画出的背景处理
         }
     }
 }

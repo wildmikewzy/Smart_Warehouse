@@ -1,7 +1,7 @@
 /*机器人的逻辑执行*/
 #pragma once
 #include "common.h"
-
+// 定义机器人对象
 class Robot {
 public:
     int id;     //机器人的id号
@@ -13,6 +13,6 @@ public:
     void update(); // 每一帧调用一次，处理移动逻辑
     void setPath(const std::vector<Point>& newPath);        //接收 Router 给的路径，更新状态
 private:
-    float realX;
+    float realX;        //机器人所在坐标
     float realY;
 };
