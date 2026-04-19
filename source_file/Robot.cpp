@@ -29,8 +29,8 @@ void Robot::update() {      //移动更新处理
             else if (realY > target.y) realY -= step;
         }
 
-        currentPos.x = (int)round(realX);
-        currentPos.y = (int)round(realY);
+		currentPos.x = float(round(realX));        // 将当前实际坐标四舍五入到最近的格点坐标，更新 currentPos
+        currentPos.y = float(round(realY));        
 
         // 判定是否“足够接近”目标点（防止浮点数抖动）
         if (abs(realX - target.x) < 0.12f && abs(realY - target.y) < 0.12f) {

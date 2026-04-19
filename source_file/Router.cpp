@@ -36,7 +36,7 @@ vector<Point> Router::getPath(Point start, Point end, const Map& map) {        /
     //pq优先的队列
     priority_queue<Node, vector<Node>, greater<Node>>pq;
     //起点初始化
-    dist[start.x][start.y] = 0;
+    dist[static_cast<int>(start.x)][static_cast<int>(start.y)] = 0;
     pq.push({ start,0 });
 
     //方向向量：上下左右
@@ -60,23 +60,24 @@ vector<Point> Router::getPath(Point start, Point end, const Map& map) {        /
         }
 
         //3.跳过无效数据
-        if (current.dist > dist[currPt.x][currPt.y]) continue;
+        if (current.dist > dist[static_cast<int>(currPt.x)][static_cast<int>(currPt.y)]) continue;
 
         //4.遍历当前点的四个方向看看还有没有更短路径
         for (int i = 0; i < 4; i++) {
-            int px = currPt.x + dx[i];//那个方向的x坐标
-            int py = currPt.y + dy[i];//那个方向的y坐标
+			float px = (currPt.x) + dx[i];// 计算新点的坐标
+			float py = (currPt.y) + dy[i];// 计算新点的坐标
 
             //5.判断能不能走
             if (map.isWalkable(px, py)) {
                 //能走，一步路径加一
-                int newDist = dist[currPt.x][currPt.y] + 1;
+                int newDist = dist[static_cast<int>(currPt.x)][static_cast<int>(currPt.y)] + 1;
 
                 //6.如果路径更短，更新
-                if (newDist < dist[px][py]) {
-                    dist[px][py] = newDist;//更新最短路径
-                    parent[px][py] = currPt;//记录路径
-                    pq.push({ {px,py},newDist });//新节点加入优先队列，接着搜索比较
+                if (newDist < dist[static_cast<int>(px)][static_cast<int>(py)]) {
+                    dist[static_cast<int>(px)][static_cast<int>(py)] = newDist;//更新最短路径
+                    parent[static_cast<int>(px)][static_cast<int>(py)] = currPt;//记录路径
+					Node newNode = { {px,py},newDist };//新节点
+                    pq.push(newNode);//新节点加入优先队列，接着搜索比较
                 }
             }
         }
@@ -89,7 +90,7 @@ vector<Point> Router::getPath(Point start, Point end, const Map& map) {        /
         //循环倒着走，到起点
         while (!(temp == Point{ -1,-1 })) {
             path.push_back(temp);//当前点存入路径
-            temp = parent[temp.x][temp.y];//当前点变成上一个点再次循环
+            temp = parent[static_cast<int>(temp.x)][static_cast<int>(temp.y)];//当前点变成上一个点再次循环
         }
         //反转倒着循环的路径，正向显示运动路径
         reverse(path.begin(), path.end());
@@ -97,6 +98,6 @@ vector<Point> Router::getPath(Point start, Point end, const Map& map) {        /
         if (!path.empty())path.erase(path.begin());
 
     }
-    path.push_back(end);        //直接把终点加入到路径里面，模拟瞬间移动到重点的效果。
+    path.push_back(end); 
     return path;
 }

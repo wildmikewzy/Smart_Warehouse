@@ -1,16 +1,19 @@
 #pragma once
 #include <vector>
+#include <cmath> // 引入 cmath 用于 std::abs
 
 /**
 * @brief 定义一个点结构体，表示地图上的位置
 */
 struct Point {
-    int x, y;
-    // 重载判，方便算法判断是否到达目标
-    bool operator == (const Point& other) const { return x == other.x && y == other.y; }
+    float x, y;
+    // 重载判等，方便算法判断是否到达目标（浮点数容差判相等）
+    bool operator == (const Point& other) const { 
+        return std::abs(x - other.x) < 0.01f && std::abs(y - other.y) < 0.01f;  
+    }
 };
 
-enum class RobotStatus { IDLE, MOVING, LOADING, ERROR_};        //定义一个机器人状态枚举体，分别表示空闲、移动、装载和错误状态
+enum class RobotStatus { IDLE, PREPARING, MOVING, LOADING, ERROR_};        //定义一个机器人状态枚举体，分别表示空闲、准备、移动、装载和错误状态
 
 // === 坐标系协议 ===
 // X轴：对应 MAP_LENGTH (水平方向)

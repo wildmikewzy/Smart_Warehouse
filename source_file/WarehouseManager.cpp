@@ -1,12 +1,15 @@
 #include "WarehouseManager.h"
 #include <iostream>
+/*
+* @brief 仓库初始化
+**/
 WarehouseManager::WarehouseManager() {
     setupScene();
 }
 void WarehouseManager::setupScene() {
     // 放置一排货架 (类型1)
     for (int i = 5; i < 15; i++) {
-        warehouseMap.setObstacle(i, 10, 1);
+        warehouseMap.setObstacle(float(i), 10, 1);
     }
 
     // 放置一个出货点 (类型2)

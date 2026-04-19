@@ -15,21 +15,21 @@ Map::Map() {
 /**
  * @brief 判断指定位置是否可以通行
  */
-bool Map::isWalkable(int x, int y) const {
+bool Map::isWalkable(float x, float y) const {
     // 首先进行边界检查，防止数组越界
     if (x < 0 || x >= MAP_LENGTH || y < 0 || y >= MAP_WIDTH) {
         return false;
     }
     // 只有空地 (0) 和 出货点 (2) 允许机器人进入
-    return (data[x][y] == 0 || data[x][y] == 2);
+    return (data[static_cast<int>(x)][static_cast<int>(y)] == 0 || data[static_cast<int>(x)][static_cast<int>(y)] == 2);
 }
 
 /**
  * @brief 设置地图元素（0:空地, 1:货架, 2:出货点）
  */
-void Map::setObstacle(int x, int y, int type) {
+void Map::setObstacle(float x, float y, int type) {
     if (x >= 0 && x < MAP_LENGTH && y >= 0 && y < MAP_WIDTH) {
-        data[x][y] = type;
+		data[static_cast<int>(x)][static_cast<int>(y)] = type;      // 将指定位置设置为对应类型，由于输入参数是float类型，先转换为int以对应数组索引
     }
 }
 

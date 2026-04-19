@@ -30,16 +30,16 @@ void GUI::render(const WarehouseManager& manager) {
             setlinestyle(PS_DOT, 2);
 
             for (size_t i = 0; i < r.historyPath.size() - 1; i++) {
-                int x1 = r.historyPath[i].x * GRID_SIZE + GRID_SIZE / 2;
-                int y1 = r.historyPath[i].y * GRID_SIZE + GRID_SIZE / 2;
-                int x2 = r.historyPath[i + 1].x * GRID_SIZE + GRID_SIZE / 2;
-                int y2 = r.historyPath[i + 1].y * GRID_SIZE + GRID_SIZE / 2;
+                int x1 = static_cast<int>(r.historyPath[i].x) * GRID_SIZE + GRID_SIZE / 2;
+                int y1 = static_cast<int>(r.historyPath[i].y) * GRID_SIZE + GRID_SIZE / 2;
+                int x2 = static_cast<int>(r.historyPath[i + 1].x) * GRID_SIZE + GRID_SIZE / 2;
+                int y2 = static_cast<int>(r.historyPath[i + 1].y) * GRID_SIZE + GRID_SIZE / 2;
                 line(x1, y1, x2, y2);
             }
         }
         setfillcolor(r.id == 1 ? BLUE : RED);
-        int px = r.currentPos.x * GRID_SIZE + GRID_SIZE / 2;
-        int py = r.currentPos.y * GRID_SIZE + GRID_SIZE / 2;
+        int px = static_cast<int>(r.currentPos.x) * GRID_SIZE + GRID_SIZE / 2;
+        int py = static_cast<int>(r.currentPos.y) * GRID_SIZE + GRID_SIZE / 2;
         fillcircle(px, py, GRID_SIZE / 3);
     }
 
@@ -81,7 +81,7 @@ void GUI::drawStatusPanel(const std::vector<Robot>& robots) {
 
         char infoLine1[100];
         char infoLine2[100];
-        sprintf_s(infoLine1, "ID: %d   Î»ÖÃ: (%d, %d)", r.id, r.currentPos.x, r.currentPos.y);
+        sprintf_s(infoLine1, "ID: %d   Î»ÖÃ: (%.2f, %.2f)", r.id, r.currentPos.x, r.currentPos.y);
         sprintf_s(infoLine2, "×´Ì¬: %s", statusStr.c_str());
 
         settextcolor(r.id == 1 ? BLUE : RED);
