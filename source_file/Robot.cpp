@@ -128,7 +128,6 @@ void Robot::update() {
             pathQueue.erase(pathQueue.begin());
         }
     }
-
     // ====================== 7. 记录历史路径（去重） ======================
     if (historyPath.empty() || !(historyPath.back() == currentPos)) {
         historyPath.push_back(currentPos);

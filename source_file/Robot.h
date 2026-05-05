@@ -2,7 +2,6 @@
 #pragma once
 #include "common.h"
 #include <vector>
-
 // 机器人类
 class Robot {
 public:
@@ -17,7 +16,7 @@ public:
     static std::vector<Robot*>* allRobots;
     static void setRobotList(std::vector<Robot*>* list);
 
-    // 公开成员（只读访问建议改成 getter，这里保持你原有风格）
+    // 公开成员（只读访问建议改成 getter，这里保持原有风格）
     int id;
     Point currentPos;
     RobotStatus status;
