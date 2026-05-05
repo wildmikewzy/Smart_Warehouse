@@ -25,7 +25,6 @@ public:
     // 路径数据
     std::vector<Point> pathQueue;
     std::vector<Point> historyPath;
-
 private:
     // 真实浮点坐标
     float realX;

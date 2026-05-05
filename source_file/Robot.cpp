@@ -95,7 +95,6 @@ void Robot::update() {
     else {
         currentSpeed = std::max(currentSpeed - DECEL, targetSpeed);
     }
-
     // 极小速度直接归零，避免抖动
     if (currentSpeed < 0.01f) {
         currentSpeed = 0.0f;
