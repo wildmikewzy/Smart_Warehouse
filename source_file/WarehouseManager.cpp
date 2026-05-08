@@ -23,8 +23,6 @@ void WarehouseManager::setupScene() {
     // 初始化机器人位置
     robots.push_back(Robot(1, { 2, 2 }));
     robots.push_back(Robot(2, { 2, 17 }));
-    robots.push_back(Robot(3, { 5, 8 }));
-	robots.push_back(Robot(4, { 5, 7 }));
 }
 /**
 * @brief 调度机器人函数
