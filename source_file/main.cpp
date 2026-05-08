@@ -1,55 +1,77 @@
 #include "GUI.h"
 #include "WarehouseManager.h"
-#include <conio.h>
 #include <iostream>
+#include <windows.h>   // GetAsyncKeyState
 
 using namespace std;
 
 int main() {
-    /*架构测试*/
-
-    // 1. 打印欢迎信息到控制台（已经开启了 EX_SHOWCONSOLE，在创建图形化窗口的时候保留控制台）
     cout << "========================================" << endl;
     cout << "   Smart_Warehouse 项目启动测试程序" << endl;
     cout << "========================================" << endl;
     cout << "操作说明：" << endl;
-    cout << "  点击按钮1 : 发送测试订单 (机器人1号前往 6,9)" << endl;
-    cout << "  点击按钮2 : 发送测试订单 (机器人2号前往 8,9)" << endl;
-    cout << "  控制台按下[ESC] : 退出系统" << endl;
+    cout << "  按键 N : 派发机器人1前往 (6,9)" << endl;
+    cout << "  按键 M : 派发机器人2前往 (8,9)" << endl;
+    cout << "  按 ESC : 退出系统" << endl;
     cout << "----------------------------------------" << endl;
 
-    // 2. 初始化业务管理器（内部会自动调用 setupScene）
     WarehouseManager manager;
-
-    // 3. 初始化 GUI 窗口
-    // 宽度 = 地图长*像素大小 + 侧边栏；高度 = 地图宽*像素大小
     GUI gui(WIN_WIDTH, WIN_HEIGHT);
 
     bool isRunning = true;
 
-    // 4. 主循环
+    // 防重复触发标志（按下时置 true，松开后重置）
+    bool keyNPressed = false;
+    bool keyMPressed = false;
+    bool keyESCPressed = false;
+
     while (isRunning) {
-        // --- 逻辑阶段 A: 处理输入 ---
-        if (_kbhit()) {     //_kbhit() 函数用于检查控制台窗口是否有按键被按下
-            char key = _getch();       // _getch() 函数是一个用于从控制台读取单个字符的函数，但它不会在屏幕上显示该字符。
-            if (key == 27) { // ESC 键
+        // ---------- 使用 GetAsyncKeyState 代替 _kbhit/_getch ----------
+        // 检测 N 键
+        if (GetAsyncKeyState('N') & 0x8000) {
+            if (!keyNPressed) {
+                keyNPressed = true;
+                manager.dispatchRobot(1, { 6, 9 });
+                gui.addPopup("已派发机器人1前往 (6,9)");
+            }
+        }
+        else {
+            keyNPressed = false;
+        }
+
+        // 检测 M 键
+        if (GetAsyncKeyState('M') & 0x8000) {
+            if (!keyMPressed) {
+                keyMPressed = true;
+                manager.dispatchRobot(2, { 8, 9 });
+                gui.addPopup("已派发机器人2前往 (8,9)");
+            }
+        }
+        else {
+            keyMPressed = false;
+        }
+
+        // 检测 ESC 键
+        if (GetAsyncKeyState(VK_ESCAPE) & 0x8000) {
+            if (!keyESCPressed) {
+                keyESCPressed = true;
                 isRunning = false;
             }
         }
+        else {
+            keyESCPressed = false;
+        }
+        // ------------------------------------------------------------
 
-        // --- 逻辑阶段 B: 更新状态 ---
+        // 更新业务状态
         manager.updateAll();
 
-        // --- 逻辑阶段 C: 渲染画面 ---
-        BeginBatchDraw(); // 开启批量绘图，杜绝闪烁
-
-        // -> 传入 manager
-        gui.handleMouseClick(manager);  
+        // 渲染画面
+        BeginBatchDraw();
+        gui.handleMouseClick(manager);
         gui.render(manager);
+        EndBatchDraw();
 
-        EndBatchDraw(); // 结束并显示
-
-        // 适当休眠，降低 CPU 占用并控制动画速度
         Sleep(30);
     }
 

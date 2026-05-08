@@ -23,7 +23,7 @@ const int MAP_LENGTH = 20;           //地图长度，单位为网格数 x
 const int MAP_WIDTH = 20;          //地图宽度，单位为网格数  y
 
 // 侧边栏宽度
-const int UI_PANEL_WIDTH = 250;
+const int UI_PANEL_WIDTH = 320;
 
 // 计算窗口总尺寸
 const int WIN_WIDTH = MAP_LENGTH * GRID_SIZE + UI_PANEL_WIDTH;
