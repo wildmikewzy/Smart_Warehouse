@@ -5,7 +5,5 @@
 
 class Router {
 public:
-    
-    // 算法工程师：骆晗旭 ，任务：在这个函数里折腾 Dijkstra 算法即可
-    static std::vector<Point> getPath(Point start, Point end, const Map& map);
+    static std::vector<Point> getPath(Point start, Point end, const Map& map, bool stopAdjacent = false);       //算法工程师骆晗旭负责这个函数的编写
 };

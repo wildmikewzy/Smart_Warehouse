@@ -1,6 +1,7 @@
 #include "GUI.h"
 #include <cmath>
 #include <iostream>
+#include <windows.h> // 在文件头部添加
 
 GUI::GUI(int l, int w) : screenLength(l), screenWideth(w) {
     initgraph(l, w, EX_SHOWCONSOLE);
@@ -21,8 +22,10 @@ void GUI::render(const WarehouseManager& manager) {
 
     for (const auto& r : manager.getRobots()) {
         setfillcolor(r.id % 2 == 0 ? BLUE : RED);
-        int px = static_cast<int>(r.currentPos.x) * GRID_SIZE + GRID_SIZE / 2;
-        int py = static_cast<int>(r.currentPos.y) * GRID_SIZE + GRID_SIZE / 2;
+        
+        // 【修改这里】：使用 r.realX 和 r.realY 进行像素计算以实现丝滑移动
+        int px = static_cast<int>(r.realX * GRID_SIZE) + GRID_SIZE / 2;
+        int py = static_cast<int>(r.realY * GRID_SIZE) + GRID_SIZE / 2;
         fillcircle(px, py, GRID_SIZE / 3);
 
         char idStr[10];
@@ -57,8 +60,8 @@ void GUI::render(const WarehouseManager& manager) {
         drawDispatchButton();
     }
 
-    DWORD currentTick = GetTickCount();
-    DWORD delta = currentTick - lastTick;
+    ULONGLONG currentTick = GetTickCount();
+    DWORD delta = static_cast<DWORD>(currentTick - lastTick);
     lastTick = currentTick;
     updatePopups(delta);
     drawPopups();
@@ -89,7 +92,7 @@ void GUI::handleMouseClick(WarehouseManager& manager) {
                             << selectedRackPos.x << "," << selectedRackPos.y << ")" << std::endl;
                         manager.dispatchRobot(selectedRobotId, selectedRackPos);
                         addPopup("已派发机器人" + std::to_string(selectedRobotId) + "号前往货架("
-                            + std::to_string((int)selectedRackPos.x) + "," + std::to_string((int)selectedRackPos.y) + ")");
+                            + std::to_string(selectedRackPos.x) + "," + std::to_string(selectedRackPos.y) + ")");
                     }
                     // 清除选中和按钮
                     selectedRobotId = -1;
@@ -151,7 +154,7 @@ void GUI::handleMouseClick(WarehouseManager& manager) {
 
                         if (robotIdle) {
                             // 机器人空闲，形成组合选中
-                            selectedRackPos = { static_cast<float>(gridX), static_cast<float>(gridY) };
+                            selectedRackPos = { gridX, gridY };
                             hasSelectedRack = true;
                             showDispatchButton = true;
                             dispatchButtonText = "将机器人" + std::to_string(selectedRobotId)
@@ -171,7 +174,7 @@ void GUI::handleMouseClick(WarehouseManager& manager) {
                     }
                     else {
                         // 没有选中机器人，只选中货架
-                        selectedRackPos = { static_cast<float>(gridX), static_cast<float>(gridY) };
+                        selectedRackPos = { gridX, gridY };
                         hasSelectedRack = true;
                         selectedRobotId = -1;   // 确保机器人取消
                         showDispatchButton = false;
@@ -224,8 +227,6 @@ void GUI::drawStatusPanel(const std::vector<Robot>& robots, bool hasRack, Point 
     settextcolor(RGB(80, 80, 80));
     outtextxy(panelX, yOffset, _T("点击机器人或货架可选中，点击空地取消"));
     yOffset += 20;
-    outtextxy(panelX, yOffset, _T("按键 N / M 派发机器人任务"));
-    yOffset += 20;
     outtextxy(panelX, yOffset, _T("ESC 退出程序"));
     yOffset += 30;
 
@@ -256,7 +257,7 @@ void GUI::drawStatusPanel(const std::vector<Robot>& robots, bool hasRack, Point 
         }
 
         char info[100];
-        sprintf_s(info, "ID: %d  位置: (%.0f, %.0f)  状态: %s",
+        sprintf_s(info, "ID: %d  位置: (%d, %d)  状态: %s",
             r.id, r.currentPos.x, r.currentPos.y, statusStr.c_str());
 
         settextcolor(r.id % 2 == 0 ? BLUE : RED);
@@ -269,7 +270,7 @@ void GUI::drawStatusPanel(const std::vector<Robot>& robots, bool hasRack, Point 
         settextcolor(BLUE);
         settextstyle(16, 0, _T("宋体"));
         char rackInfo[80];
-        sprintf_s(rackInfo, "选中货架: (%.0f, %.0f)", rackPos.x, rackPos.y);
+        sprintf_s(rackInfo, "选中货架: (%d, %d)", rackPos.x, rackPos.y);
         outtextxy(panelX, yOffset, _T(rackInfo));
         yOffset += 22;
     }
@@ -284,7 +285,7 @@ bool GUI::isTimeout() const {
 }
 
 void GUI::updateBlink() {
-    DWORD now = GetTickCount();
+    ULONGLONG now = GetTickCount();
     if (now - lastBlinkTime >= 500) {
         blinkVisible = !blinkVisible;
         lastBlinkTime = now;
