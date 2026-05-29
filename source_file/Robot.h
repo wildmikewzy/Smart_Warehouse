@@ -1,4 +1,4 @@
-/*机器人的逻辑执行*/
+﻿/*机器人的逻辑执行*/
 #pragma once
 #include "common.h"
 #include <vector>
@@ -29,8 +29,6 @@ public:
     // 路径数据
     std::vector<Point> pathQueue;       //路径列表
 	std::vector<Point> historyPath;     //历史路径列表，记录已经走过的路径点
-
-private:
     // 离散格点移动控制
     int moveCooldown;       // 当前格子的剩余停留帧数
     int currentStepFrames;  // 当前速度级别下，走一格所需的标准帧数（越小越快）

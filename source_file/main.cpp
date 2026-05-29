@@ -18,6 +18,80 @@ int main() {
     bool keyNPressed = false;
     bool keyMPressed = false;
     bool keyESCPressed = false;
+    bool keyTPressed = false;
+
+    int stressStage = 0;
+    bool stressTest2Waiting = false;
+    int stressTest2DelayFrames = 0;
+    int stressTest2StationId = -1;
+
+    auto getStationIdOrLog = [&](int x, int y, const string& label) -> int {
+        int stationId = manager.getStationIdByGrid(x, y);
+        if (stationId == -1) {
+            cout << "[StressTest] " << label << "Õ¾µã×ø±ê(" << x << "," << y << ")ÎÞÐ§£¬²âÊÔÒÑÌø¹ý¡£" << endl;
+        }
+        return stationId;
+    };
+
+    auto triggerStressStage = [&](int stage) {
+        if (stage == 1) {
+            cout << "[StressTest] ½×¶Î1£º¶ÔÍ·ËÀËø³åÍ»²âÊÔ" << endl;
+
+            int leftStationId = getStationIdOrLog(2, 2, "×ó²à");
+            int rightStationId = getStationIdOrLog(16, 2, "ÓÒ²à");
+            if (leftStationId == -1 || rightStationId == -1) {
+                return;
+            }
+
+            manager.prepareStressTest({ {1, {0, 10}}, {2, {18, 10}} });
+            manager.dispatchRobot(1, rightStationId);
+            manager.dispatchRobot(2, leftStationId);
+        }
+        else if (stage == 2) {
+            cout << "[StressTest] ½×¶Î2£ºÖÕµãÇÀÕ¼Óë¾²Ö¹Õ¼Áì²âÊÔ" << endl;
+
+            int targetStationId = getStationIdOrLog(2, 12, "¹²ÏíÖÕµã");
+            if (targetStationId == -1) {
+                return;
+            }
+
+            manager.prepareStressTest({ {1, {0, 10}}, {2, {0, 9}} });
+            manager.dispatchRobot(1, targetStationId);
+
+            stressTest2Waiting = true;
+            stressTest2DelayFrames = 45;
+            stressTest2StationId = targetStationId;
+        }
+        else if (stage == 3) {
+            cout << "[StressTest] ½×¶Î3£ºÊ®×ÖÂ·¿ÚËÄÏò¡°¹íÌ½Í·¡±³åÍ»²âÊÔ" << endl;
+
+            int topStationId = getStationIdOrLog(2, 2, "ÉÏ²à");
+            int bottomStationId = getStationIdOrLog(2, 12, "ÏÂ²à");
+            int rightStationId = getStationIdOrLog(16, 2, "ÓÒ²à");
+            int leftStationId = getStationIdOrLog(16, 12, "×ó²à");
+            if (topStationId == -1 || bottomStationId == -1 || rightStationId == -1 || leftStationId == -1) {
+                return;
+            }
+
+            manager.prepareStressTest({ {1, {9, 8}}, {2, {9, 11}}, {3, {8, 9}}, {4, {11, 9}} });
+            manager.dispatchRobot(1, bottomStationId);
+            manager.dispatchRobot(2, topStationId);
+            manager.dispatchRobot(3, rightStationId);
+            manager.dispatchRobot(4, leftStationId);
+        }
+        else if (stage == 4) {
+            cout << "[StressTest] ½×¶Î4£º¶¯Ì¬Î²ËæÓë×·Î²²âÊÔ" << endl;
+
+            int rightStationId = getStationIdOrLog(16, 2, "ÓÒ²à");
+            if (rightStationId == -1) {
+                return;
+            }
+
+            manager.prepareStressTest({ {1, {1, 10}}, {2, {0, 10}} });
+            manager.dispatchRobot(1, rightStationId);
+            manager.dispatchRobot(2, rightStationId);
+        }
+    };
 
     while (isRunning) {
 		// ¼ì²â ESC ¼ü£¬°´ÏÂESC¼üÔò°²È«ÍË³ö³ÌÐò
@@ -30,6 +104,29 @@ int main() {
         else {
             keyESCPressed = false;
         }
+
+        if (GetAsyncKeyState('T') & 0x8000) {
+            if (!keyTPressed) {
+                keyTPressed = true;
+                stressStage = (stressStage % 4) + 1;
+                triggerStressStage(stressStage);
+            }
+        }
+        else {
+            keyTPressed = false;
+        }
+
+        if (stressTest2Waiting) {
+            if (stressTest2DelayFrames > 0) {
+                stressTest2DelayFrames--;
+            }
+            if (stressTest2DelayFrames == 0) {
+                cout << "[StressTest] ÖÕµãÇÀÕ¼²âÊÔ£ºÅÉ·¢2ºÅ»úÆ÷ÈË" << endl;
+                manager.dispatchRobot(2, stressTest2StationId);
+                stressTest2Waiting = false;
+            }
+        }
+
         // ¸üÐÂÒµÎñ×´Ì¬
         manager.updateAll();
         // äÖÈ¾»­Ãæ

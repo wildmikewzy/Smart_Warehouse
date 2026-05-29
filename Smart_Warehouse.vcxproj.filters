@@ -53,4 +53,7 @@
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>
+  <ItemGroup>
+    <None Include="CONTRIBUTING.md" />
+  </ItemGroup>
 </Project>

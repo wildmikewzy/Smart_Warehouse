@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <graphics.h>
 #include "common.h"
 #include "WarehouseManager.h"
@@ -20,6 +20,8 @@ private:
     int selectedRobotId = -1;
     bool hasSelectedRack = false;
     Point selectedRackPos = { -1, -1 };
+    bool hasSelectedTarget = false;
+    Point selectedTargetPos = { -1, -1 };
     std::list<PopupMessage> popups;
     DWORD lastBlinkTime;
     bool blinkVisible = true;
@@ -28,6 +30,11 @@ private:
     bool showDispatchButton = false;
     RECT dispatchButtonRect;
     std::string dispatchButtonText;
+
+    // 新增：格点派送按钮相关
+    bool showGridDispatchButton = false;
+    RECT gridDispatchButtonRect;
+    std::string gridDispatchButtonText;
 
 public:
     GUI(int l, int w);
@@ -40,11 +47,13 @@ public:
 
 private:
     void drawGrid();
-    void drawStatusPanel(const std::vector<Robot>& robots, bool hasRack, Point rackPos);
+    void drawStatusPanel(const std::vector<Robot>& robots, bool hasRack, Point rackPos, bool hasTarget, Point targetPos);
     void updatePopups(DWORD deltaTime);
     void drawPopups();
     void updateBlink();
     void drawSelectionRing(const Point& pos);
     void drawRackSelectionRing(const Point& pos);
+    void drawTargetSelectionRing(const Point& pos);
     void drawDispatchButton();   // 新增：绘制派送按钮
+    void drawGridDispatchButton();
 };

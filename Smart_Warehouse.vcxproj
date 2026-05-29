@@ -138,6 +138,9 @@
     <ClInclude Include="source_file\Router.h" />
     <ClInclude Include="source_file\WarehouseManager.h" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="CONTRIBUTING.md" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
