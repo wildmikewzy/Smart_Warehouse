@@ -6,6 +6,8 @@
 GUI::GUI(int l, int w) : screenLength(l), screenWideth(w) {
     initgraph(l, w, EX_SHOWCONSOLE);
     setbkcolor(WHITE);
+    BeginBatchDraw(); // 开启双缓冲，彻底消除界面闪烁
+
     startTime = std::chrono::steady_clock::now();
     lastTick = GetTickCount();
     lastBlinkTime = GetTickCount();
@@ -24,7 +26,15 @@ void GUI::render(const WarehouseManager& manager) {
     manager.getMap().draw();
 
     for (const auto& r : manager.getRobots()) {
-        setfillcolor(r.id % 2 == 0 ? BLUE : RED);
+        
+        // 【核心显示变色逻辑】：
+        // 按照你的要求：在装载货物时(停留5s期间) 和 前往出货口(携货行驶期间) 车身为蓝色。
+        // 在开始卸货(到达19,10停留3s)、空闲(IDLE状态)及空车去接货时，均恢复红色。
+        if (r.status == RobotStatus::LOADING || r.status == RobotStatus::MOVING_TO_DELIVER) {
+            setfillcolor(BLUE);
+        } else {
+            setfillcolor(RED);
+        }
 
         // 使用 r.realX / r.realY 绘制更平滑的实际位置
         int px = static_cast<int>(r.realX * GRID_SIZE) + GRID_SIZE / 2;
@@ -76,7 +86,7 @@ void GUI::render(const WarehouseManager& manager) {
         drawTargetSelectionRing(selectedTargetPos);
     }
 
-    drawStatusPanel(manager.getRobots(), hasSelectedRack, selectedRackPos, hasSelectedTarget, selectedTargetPos);
+    drawStatusPanel(manager, hasSelectedRack, selectedRackPos, hasSelectedTarget, selectedTargetPos);
 
     // 右侧按钮
     if (showDispatchButton) {
@@ -91,6 +101,8 @@ void GUI::render(const WarehouseManager& manager) {
     lastTick = currentTick;
     updatePopups(delta);
     drawPopups();
+
+    FlushBatchDraw(); // 将当前帧缓冲区画面一次性推送到屏幕，防止闪烁
 }
 
 void GUI::handleMouseClick(WarehouseManager& manager) {
@@ -224,7 +236,7 @@ void GUI::drawGrid() {
         line(0, i * GRID_SIZE, MAP_LENGTH * GRID_SIZE, i * GRID_SIZE);
 }
 
-void GUI::drawStatusPanel(const std::vector<Robot>& robots, bool hasRack, Point rackPos, bool hasTarget, Point targetPos) {
+void GUI::drawStatusPanel(const WarehouseManager& manager, bool hasRack, Point rackPos, bool hasTarget, Point targetPos) {
     settextcolor(BLACK);
     settextstyle(20, 0, _T("微软雅黑"));
 
@@ -236,10 +248,8 @@ void GUI::drawStatusPanel(const std::vector<Robot>& robots, bool hasRack, Point 
 
     settextstyle(14, 0, _T("宋体"));
     settextcolor(RGB(80, 80, 80));
-    outtextxy(panelX, yOffset, _T("提示：先选中机器人，再选货架/格点"));
-    yOffset += 20;
     outtextxy(panelX, yOffset, _T("ESC 退出程序"));
-    yOffset += 30;
+    yOffset += 20;
 
     auto now = std::chrono::steady_clock::now();
     auto elapsedSeconds = std::chrono::duration_cast<std::chrono::seconds>(now - startTime).count();
@@ -249,7 +259,7 @@ void GUI::drawStatusPanel(const std::vector<Robot>& robots, bool hasRack, Point 
     settextstyle(16, 0, _T("宋体"));
     settextcolor(BLACK);
     char timerStr[50];
-    sprintf_s(timerStr, "运行时间: %02lld分%02lld秒 (超过30分钟)", minutes, seconds);
+    sprintf_s(timerStr, "运行时间: %02lld分%02lld秒", minutes, seconds);
     outtextxy(panelX, yOffset, _T(timerStr));
     yOffset += 30;
 
@@ -257,18 +267,20 @@ void GUI::drawStatusPanel(const std::vector<Robot>& robots, bool hasRack, Point 
     outtextxy(panelX, yOffset, _T("机器人状态："));
     yOffset += 25;
 
-    for (const auto& r : robots) {
+    for (const auto& r : manager.getRobots()) {
         std::string statusStr;
         switch (r.status) {
-        case RobotStatus::IDLE:    statusStr = "空闲"; break;
-        case RobotStatus::MOVING:  statusStr = "移动中"; break;
-        case RobotStatus::LOADING: statusStr = "装载"; break;
-        case RobotStatus::ERROR_:  statusStr = "故障"; break;
-        default:                   statusStr = "未知"; break;
+        case RobotStatus::IDLE:           statusStr = "空闲"; break;
+        case RobotStatus::MOVING_TO_PICK: statusStr = "前往取货"; break;
+        case RobotStatus::LOADING:        statusStr = "装载中"; break;
+        case RobotStatus::MOVING_TO_DELIVER:statusStr = "前往出货"; break;
+        case RobotStatus::UNLOADING:      statusStr = "卸货中"; break;
+        case RobotStatus::ERROR_:         statusStr = "故障"; break;
+        default:                          statusStr = "未知"; break;
         }
 
         char info[100];
-        sprintf_s(info, "ID: %d  位置: (%d, %d)  状态: %s",
+        sprintf_s(info, "ID:%d 位置:(%d,%d) %s",
             r.id, r.currentPos.x, r.currentPos.y, statusStr.c_str());
 
         settextcolor(r.id % 2 == 0 ? BLUE : RED);
@@ -276,27 +288,59 @@ void GUI::drawStatusPanel(const std::vector<Robot>& robots, bool hasRack, Point 
         yOffset += 22;
     }
 
-    // 显示选中货架信息
+    // 选中提示占位...
     if (hasRack && !showDispatchButton) {
         settextcolor(BLUE);
-        settextstyle(16, 0, _T("宋体"));
         char rackInfo[80];
         sprintf_s(rackInfo, "选中货架: (%d, %d)", rackPos.x, rackPos.y);
         outtextxy(panelX, yOffset, _T(rackInfo));
-        yOffset += 22;
     }
+    yOffset += 22;
 
-    // 显示选中格点信息
-    if (hasTarget && !showGridDispatchButton) {
-        settextcolor(GREEN);
-        settextstyle(16, 0, _T("宋体"));
-        char targetInfo[80];
-        sprintf_s(targetInfo, "选中格点: (%d, %d)", targetPos.x, targetPos.y);
-        outtextxy(panelX, yOffset, _T(targetInfo));
-        yOffset += 22;
-    }
-
+    // === 新增：实时订单显示区域（规避在 350-450 坐标被按钮覆盖，从 y=450 画起）===
+    yOffset = 450; 
+    settextstyle(16, 0, _T("微软雅黑"));
     settextcolor(BLACK);
+    outtextxy(panelX, yOffset, _T("【 实时业务订单监控 (WMS) 】"));
+    yOffset += 30;
+
+    auto orders = manager.getOrderSystem().getAllOrders();
+    if (orders.empty()) {
+        settextstyle(14, 0, _T("宋体"));
+        settextcolor(RGB(150, 150, 150));
+        outtextxy(panelX, yOffset, _T("暂无排队订单..."));
+    } else {
+        settextstyle(14, 0, _T("宋体"));
+        int max_display = 10; // 侧边栏最多同时显示10条，防止越界
+        
+        for (size_t i = 0; i < orders.size() && i < max_display; ++i) {
+            const auto& o = orders[i];
+            
+            std::string stateStr;
+            if (o.status == OrderStatus::WAITING) stateStr = "等待分配>";
+            else if (o.status == OrderStatus::PROCESSING) stateStr = "小车执行中>";
+            else stateStr = "已完成>";
+
+            std::string skuStr = (o.sku == SKUType::A) ? "A" : ((o.sku == SKUType::B) ? "B" : "C");
+
+            char orderText[100];
+            sprintf_s(orderText, "单源#%d | 站点:%d | SKU:%s | %s", 
+                      o.orderId, o.targetStationId, skuStr.c_str(), stateStr.c_str());
+            
+            // 依据单源状态染色
+            if (o.status == OrderStatus::WAITING) settextcolor(RGB(100, 100, 100));
+            else if (o.status == OrderStatus::PROCESSING) settextcolor(RGB(20, 120, 200));
+            else settextcolor(GREEN);
+
+            outtextxy(panelX, yOffset, _T(orderText));
+            yOffset += 20;
+        }
+
+        if (orders.size() > max_display) {
+            settextcolor(RGB(150, 150, 150));
+            outtextxy(panelX, yOffset, _T("... 更多订单折叠中"));
+        }
+    }
 }
 
 bool GUI::isTimeout() const {

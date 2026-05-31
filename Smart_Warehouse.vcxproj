@@ -126,6 +126,7 @@
     <ClCompile Include="source_file\GUI.cpp" />
     <ClCompile Include="source_file\main.cpp" />
     <ClCompile Include="source_file\Map.cpp" />
+    <ClCompile Include="source_file\OrderSystem.cpp" />
     <ClCompile Include="source_file\Robot.cpp" />
     <ClCompile Include="source_file\Router.cpp" />
     <ClCompile Include="source_file\WarehouseManager.cpp" />
@@ -134,11 +135,13 @@
     <ClInclude Include="source_file\common.h" />
     <ClInclude Include="source_file\GUI.h" />
     <ClInclude Include="source_file\Map.h" />
+    <ClInclude Include="source_file\OrderSystem.h" />
     <ClInclude Include="source_file\Robot.h" />
     <ClInclude Include="source_file\Router.h" />
     <ClInclude Include="source_file\WarehouseManager.h" />
   </ItemGroup>
   <ItemGroup>
+    <None Include=".editorconfig" />
     <None Include="CONTRIBUTING.md" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

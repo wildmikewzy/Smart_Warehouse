@@ -1,4 +1,4 @@
-/*机器人动态逻辑接口*/
+﻿/*机器人动态逻辑接口*/
 #include "Robot.h"
 #include <algorithm> // 包含 std::min / std::max
 
@@ -12,106 +12,107 @@ void Robot::setRobotList(std::vector<Robot*>* list) {
 Robot::Robot(int _id, Point start)
     : id(_id), currentPos(start), status(RobotStatus::IDLE),
     currentSpeed(0.0f), moveCooldown(0), currentStepFrames(15) {
-    
+
     // 初始化视觉坐标，让其和出生点重合
     realX = static_cast<float>(start.x);
     realY = static_cast<float>(start.y);
+    // 记录初始待命点为 homePos
+    homePos = start;
+
+    // 初始化上一个位置
+    lastPos = start;
+    moveProgress = 0.0f;
+    cellStepCompleted = false;
 }
 
 void Robot::setPath(const std::vector<Point>& newPath) {
     pathQueue = newPath;
+    // 只要有新路径派发，重置进度条与起点基准
+    moveProgress = 0.0f;
+    lastPos = currentPos;
+    cellStepCompleted = false;
     if (!pathQueue.empty()) {
-        status = RobotStatus::MOVING;
-        // 起步时最慢，走一格需要 15 帧
-        currentStepFrames = 15;
-        moveCooldown = 0;  // 立即开始第一步
+        currentStepFrames = 1;
+        moveCooldown = 0;  // 立即开始
     }
 }
 
 void Robot::update() {
-    // === 永远执行的视觉平滑过滤部分 ===
-    // 不论逻辑有没有到达下一格，视觉上始终以追赶的方式向 currentPos(逻辑格) 滑动
-    float dx_vis = static_cast<float>(currentPos.x) - realX;
-    float dy_vis = static_cast<float>(currentPos.y) - realY;
-    
-    // 平滑追赶缓冲比例（例如每帧靠近差距的25%）
-    // 数值越小越“拖尾滑行”，数值越大越紧贴网格
-    realX += dx_vis * 0.25f;
-    realY += dy_vis * 0.25f;
+    cellStepCompleted = false; // 每帧开始前重置单格跨越完成信号
 
-    // === 以下为纯网格逻辑处理 ===
-    if (status != RobotStatus::MOVING || pathQueue.empty()) {
+    // ====================== 1. 业务装卸货/等待冷却处理 ======================
+    if (status == RobotStatus::LOADING || status == RobotStatus::UNLOADING) {
+        if (workCooldown > 0) {
+            workCooldown--;
+        }
+        // 在装卸货期间，强行将视觉位置锁定在当前逻辑格
+        realX = static_cast<float>(currentPos.x);
+        realY = static_cast<float>(currentPos.y);
+        lastPos = currentPos;
+        moveProgress = 0.0f;
         currentSpeed = 0.0f;
         return;
     }
 
-    // 处理当前格子的冷却（停留时间）
-    if (moveCooldown > 0) {
-        moveCooldown--;
-        return; // 还没冷却好，这一帧继续停留在此格
+    // ====================== 2. 纯网格逻辑与路径处理 ======================
+    if (pathQueue.empty()) {
+        currentSpeed = 0.0f;
+        // 没路径时，视觉位置必须精准等于逻辑位置
+        realX = static_cast<float>(currentPos.x);
+        realY = static_cast<float>(currentPos.y);
+        lastPos = currentPos;
+        moveProgress = 0.0f;
+        return;
     }
 
+    if (moveCooldown > 0) {
+        moveCooldown--;
+        return;
+    }
+
+    // 目标格子就是路径队列的第一个点
     Point target = pathQueue.front();
 
-    // ====================== 1. 离散锁格防碰撞检测 ======================
-    bool blocked = false;
-    if (allRobots != nullptr) {
-        for (Robot* other : *allRobots) {
-            if (other->id == id) continue;
-            // 简单判定：如果有其他机器人已经在我们的目标格，就卡住
-            if (other->currentPos == target) {
-                blocked = true;
-                break;
-            }
+    // 如果目标点就是自己当前所在的点（寻路冗余保护），直接弹出
+    if (target == currentPos) {
+        pathQueue.erase(pathQueue.begin());
+        lastPos = currentPos;
+        moveProgress = 0.0f;
+        return;
+    }
+
+    // ====================== 3. 匀速平滑插值核心 =/*匀速推进插值*/=====================
+    // 设定每帧前进的进度百分比（0.1f 代表 10 帧走完一格，你可以通过调整这个值来改变车速）
+    float speedStep = 0.1f;
+    moveProgress += speedStep;
+    currentSpeed = 20.0f; // 看板速度显示
+
+    if (moveProgress >= 1.0f) {
+        // 当进度条充满，说明小车这一个格子已经在视觉上完全走完
+        moveProgress = 1.0f;
+
+        // 真正的物理坐标在一帧内跨越到新格子
+        currentPos = target;
+        lastPos = currentPos; // 滚动起点基准
+        moveProgress = 0.0f;  // 重置进度条
+
+        // 写入历史轨迹
+        if (historyPath.empty() || !(historyPath.back() == currentPos)) {
+            historyPath.push_back(currentPos);
+        }
+
+        // 从路径队列中弹出已经走完的这一格
+        pathQueue.erase(pathQueue.begin());
+
+        // 【最核心触发机制】：通知外部管理器，这辆车刚刚跨越完一整格
+        cellStepCompleted = true;
+
+        if (pathQueue.empty()) {
+            currentSpeed = 0.0f;
         }
     }
 
-    if (blocked) {
-        // 如果被挡住了，重头慢速起步
-        currentStepFrames = 15; 
-        moveCooldown = 0; // 不刷新长冷却，下一帧继续检测是否通畅
-        currentSpeed = 0.0f; // UI 速度显示为 0
-        return; // 即使被挡住不移动，最上方的视觉 realX 也会追赶贴合到网格中心
-    }
-
-    // ====================== 2. 执行移动 (逻辑瞬间进驻新网格) ======================
-    currentPos = target;
-
-    // ====================== 3. 计算离散加减速 (调整下一次的冷却帧数) ======================
-    int remainingSteps = static_cast<int>(pathQueue.size());
-    
-    // 基础定义：帧数越少，车开得越快
-    const int MAX_SPEED_FRAMES = 3;  // 最高速：只需 3 帧换一格
-    const int MIN_SPEED_FRAMES = 15; // 最慢速：需 15 帧换一格
-    
-    // 剩余步数小于 4 步时，开始逐渐增加所需的帧数（减速）
-    if (remainingSteps <= 4) {
-        currentStepFrames += 3; // 猛踩刹车：每走一步，下次多停3帧
-    } else {
-        // 否则持续减少所需的帧数（加速），直到到达满速
-        currentStepFrames -= 2; 
-    }
-    
-    // 限幅控制
-    currentStepFrames = std::max(MAX_SPEED_FRAMES, std::min(currentStepFrames, MIN_SPEED_FRAMES));
-    
-    // 为了 GUI 状态面板看起来合理，将帧数倒数映射为表观数字速度
-    currentSpeed = (float)MIN_SPEED_FRAMES / currentStepFrames;
-
-    // 重置冷却器，准备下一次逻辑跳跃
-    moveCooldown = currentStepFrames;
-
-    // ====================== 4. 后处理 ======================
-    // 记录历史路径
-    if (historyPath.empty() || !(historyPath.back() == currentPos)) {
-        historyPath.push_back(currentPos);
-    }
-
-    // 抹除刚才已走过的节点
-    pathQueue.erase(pathQueue.begin());
-
-    if (pathQueue.empty()) {
-        status = RobotStatus::IDLE;
-        currentSpeed = 0.0f;
-    }
+    // 根据上一格起点 lastPos 与目标格 target 严格按照分量直线插值，拒绝大斜线和鬼影！
+    realX = static_cast<float>(lastPos.x) + (static_cast<float>(target.x) - static_cast<float>(lastPos.x)) * moveProgress;
+    realY = static_cast<float>(lastPos.y) + (static_cast<float>(target.y) - static_cast<float>(lastPos.y)) * moveProgress;
 }

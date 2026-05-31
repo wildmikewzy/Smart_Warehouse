@@ -32,6 +32,9 @@
     <ClCompile Include="source_file\main.cpp">
       <Filter>主函数</Filter>
     </ClCompile>
+    <ClCompile Include="source_file\OrderSystem.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="source_file\common.h">
@@ -52,8 +55,12 @@
     <ClInclude Include="source_file\WarehouseManager.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="source_file\OrderSystem.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="CONTRIBUTING.md" />
+    <None Include=".editorconfig" />
   </ItemGroup>
 </Project>

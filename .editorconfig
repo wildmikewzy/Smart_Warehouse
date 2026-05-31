@@ -1,0 +1,4 @@
+root = true
+
+[source_file/**]
+charset = utf-8-bom

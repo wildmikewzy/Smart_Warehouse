@@ -16,14 +16,14 @@ private:
     int screenLength;
     int screenWideth;
     std::chrono::steady_clock::time_point startTime;
-    DWORD lastTick;
+    ULONGLONG lastTick;
     int selectedRobotId = -1;
     bool hasSelectedRack = false;
     Point selectedRackPos = { -1, -1 };
     bool hasSelectedTarget = false;
     Point selectedTargetPos = { -1, -1 };
     std::list<PopupMessage> popups;
-    DWORD lastBlinkTime;
+    ULONGLONG lastBlinkTime;
     bool blinkVisible = true;
 
     // 新增：派送按钮相关
@@ -44,11 +44,11 @@ public:
     void handleMouseClick(WarehouseManager& manager);  // 改为非const，以调用派发
     bool isTimeout() const;
     void addPopup(const std::string& text, float duration = 2.5f);
+    void updatePopups(DWORD deltaTime);
 
 private:
     void drawGrid();
-    void drawStatusPanel(const std::vector<Robot>& robots, bool hasRack, Point rackPos, bool hasTarget, Point targetPos);
-    void updatePopups(DWORD deltaTime);
+    void drawStatusPanel(const WarehouseManager& manager, bool hasRack, Point rackPos, bool hasTarget, Point targetPos);
     void drawPopups();
     void updateBlink();
     void drawSelectionRing(const Point& pos);
