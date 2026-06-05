@@ -11,12 +11,12 @@ OrderSystem::OrderSystem()
 }
 
 /**
- * @brief 在系统中随机生成一个包含不同 SKU 类型和目标货架网格的业务订单
+ * @brief 在系统中随机生成一个包含不同 SKU 类型和目标货架网格的业务订单（防重复改良版）
  * @param validShelfStationIds 仓库中当前所有合法可选的货架站点（Station ID）集合列表
  * @retval 无
  * @details
  * 1. 首先对输入的货架站点列表进行安全性空检查，若无合法货架则直接拦截返回。\n
- * 2. 利用均匀分布随机抽取一个货架作为本次任务的取货站点。\n
+ * 2. 利用均匀分布随机抽取一个货架，并结合当前活跃队列进行动态去重，确保同货架不并发。\n
  * 3. 利用离散权重分布（按 60% A类、30% B类、10% C类的高级仓储热度规律）为订单赋予物料 SKU 属性。\n
  * 4. 自动递增生成唯一的订单 ID，将订单初始状态标记为 WAITING（等待分配），最后压入活跃订单队列。
  */
@@ -25,13 +25,41 @@ void OrderSystem::generateRandomOrder(const std::vector<int>& validShelfStationI
         return;
     }
 
-	std::uniform_int_distribution<size_t> stationDist(0, validShelfStationIds.size() - 1);      // 均匀分布随机选择一个货架站点
-	std::discrete_distribution<int> skuDist({ 60, 30, 10 });        // 离散分布随机选择 SKU 类型，权重分别为 60% A类、30% B类、10% C类
+    std::uniform_int_distribution<size_t> stationDist(0, validShelfStationIds.size() - 1);      // 均匀分布随机选择一个货架站点
+    std::discrete_distribution<int> skuDist({ 60, 30, 10 });        // 离散分布随机选择 SKU 类型，权重分别为 60% A类、30% B类、10% C类
 
+    int chosenStationId = -1;
+    bool isDuplicate = true;
+    int attempts = 0; // 防死循环计数器（若仓储货架全部处于有单状态，安全退出）
+
+    // 🌟【硬核自旋去重】：完美保护你的标准随机分布
+    while (isDuplicate && attempts < 15) {
+        // 使用你原本优雅的 C++11 标准分布进行随机抓取
+        chosenStationId = validShelfStationIds[stationDist(rng)];
+        isDuplicate = false;
+        attempts++;
+
+        // 核心检查：如果这个货架已经存在于活跃订单列表（activeOrders）中，则判定为冲突
+        for (const auto& existingOrder : activeOrders) {
+            // 只要订单还没被彻底消费完（处于 WAITING 或 PROCESSING 状态），就不能重复去同一个货架
+            if (existingOrder.targetStationId == chosenStationId) {
+                isDuplicate = true;
+                break; // 命中雷区，直接打破当前内循环，准备进入下一轮自旋随机
+            }
+        }
+    }
+
+    // 防御保护：如果随机了15次都撞车（说明当前大部分可用货架都在跑任务呢），
+    // 这一帧就放弃生成，把宝贵的系统带宽留给正在跑的小车，绝对不卡死主线程。
+    if (isDuplicate) {
+        return;
+    }
+
+    // 走到这里，说明 chosenStationId 纯净、唯一、且完美符合热度分布！
     Order order;
     order.orderId = nextOrderId++;
-    order.targetStationId = validShelfStationIds[static_cast<int>(stationDist(rng))];
-    order.sku = static_cast<SKUType>(skuDist(rng)); 
+    order.targetStationId = chosenStationId;
+    order.sku = static_cast<SKUType>(skuDist(rng));
     order.status = OrderStatus::WAITING;
 
     activeOrders.push_back(order);

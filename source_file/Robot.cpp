@@ -37,13 +37,13 @@ void Robot::setPath(const std::vector<Point>& newPath) {
     }
 }
 /**
-* @brief Robot 的核心更新函数，负责处理移动、装卸货逻辑以及视觉坐标的平滑插值
+* @brief Robot 的核心更新函数，负责处理移动、装卸货逻辑以及视觉坐标的平滑插值（全面免疫死锁优化版）
 */
 void Robot::update() {
     cellStepCompleted = false; // 每帧开始前重置单格跨越完成信号
-    // 如果 this 已经是 nullptr，直接通过最外层调用拦截。
-    // 但为了防止极端的虚函数表崩溃或野指针，函数进来第一件事就是把所有的指针检查做全：
+
     if (allRobots == nullptr) return;
+
     // ====================== 1. 业务装卸货/等待冷却处理 ======================
     if (status == RobotStatus::LOADING || status == RobotStatus::UNLOADING) {
         // 在装卸货期间，强行将视觉位置锁定在当前逻辑格
@@ -65,24 +65,38 @@ void Robot::update() {
         moveProgress = 0.0f;
         return;
     }
-    // 【针对指针型 vector 指针的完美解引用】
-    // 1. 在 allRobots 前面加一个 * 号，代表“顺着指针找到那个真正的 vector 容器”
+
     bool visualBlocked = false;
     Point nextPos = pathQueue.front(); // 我下一步要去的格子
 
-    for (const auto& otherPtr : *allRobots) {
-        // 2. 安全检查：防止容器里有空指针
-        if (otherPtr == nullptr) continue;
+    // 【针对直道递补与回巢的雷达免检芯片】：
+    // 如果我本身正在排队直道执行强力递补，或者我已经快到老家了，直接免检，跳过空气墙判定！
+    bool amIExempt = false;
+    if (status == RobotStatus::MOVING_TO_DELIVER && currentPos.y == 10) {
+        amIExempt = true; // 正在排队道上递补的车，100% 安全，免检！
+    }
+    if (status == RobotStatus::RETURNING_BUFFER && nextPos.x == 0) {
+        amIExempt = true; // 正在迈入老家出生点(X=0)的最后一步车，免检！
+    }
 
-        // 3. 因为 vector 里装的是 Robot*，所以 otherPtr 是个指针，用 ->id 和自身指针比较
-        if (otherPtr == this) continue;
+    if (!amIExempt) {
+        for (const auto& otherPtr : *allRobots) {
+            if (otherPtr == nullptr) continue;
+            if (otherPtr == this) continue;
 
-        // 4. 用 -> 访问前方小车的坐标和动画进度
-        if (otherPtr->currentPos == nextPos) {
-            // 如果前车的转弯/直线动画还没完全拉开空间（屁股还没挪干净）
-            if (otherPtr->moveProgress < 0.8f) {
-                visualBlocked = true;
-                break;
+            // 🌟【前车状态免疫】：如果前车已经卸完货正在撤离（RETURNING_BUFFER），
+            // 就算它屁股还在 (18,10) 蹭着没拉开距离，后面准备递补的车也绝对不要被它挡住！
+            if (otherPtr->status == RobotStatus::RETURNING_BUFFER) {
+                continue; // 忽略离场车的视觉干扰
+            }
+
+            // 用 -> 访问前方小车的坐标和动画进度
+            if (otherPtr->currentPos == nextPos) {
+                // 如果前车的转弯/直线动画还没完全拉开空间（屁股还没挪干净）
+                if (otherPtr->moveProgress < 1.0f) {
+                    visualBlocked = true;
+                    break;
+                }
             }
         }
     }
@@ -91,6 +105,7 @@ void Robot::update() {
         // 触发渲染暂停视觉保护：本帧不累加动画进度，在屏幕上微微一顿，等待前车走开
         return;
     }
+
     if (moveCooldown > 0) {
         moveCooldown--;
         return;
@@ -107,8 +122,7 @@ void Robot::update() {
         return;
     }
 
-    // ====================== 3. 匀速平滑插值核心 =/*匀速推进插值*/=====================
-    // 设定每帧前进的进度百分比（0.1f 代表 10 帧走完一格，你可以通过调整这个值来改变车速）
+    // ====================== 3. 匀速平滑插值核心 =====================
     float speedStep = 0.1f;
     moveProgress += speedStep;
     currentSpeed = 20.0f; // 看板速度显示
@@ -138,7 +152,7 @@ void Robot::update() {
         }
     }
 
-    // 根据上一格起点 lastPos 与目标格 target 严格按照分量直线插值，拒绝大斜线和鬼影！
+    // 根据上一格起点 lastPos 与目标格 target 严格按照分量直线插值
     realX = static_cast<float>(lastPos.x) + (static_cast<float>(target.x) - static_cast<float>(lastPos.x)) * moveProgress;
     realY = static_cast<float>(lastPos.y) + (static_cast<float>(target.y) - static_cast<float>(lastPos.y)) * moveProgress;
 }

@@ -231,24 +231,37 @@ void WarehouseManager::dispatchRobot(int robotId, int stationId) {
 */
 
 int getNextAvailableQueueX_AtGate(const std::vector<Robot>& robots) {
-    // 从最前方的 18 开始向左扫描到 15
+    // 从队头 18 倒着扫到大门 15
     for (int x = 18; x >= 15; --x) {
         bool isOccupied = false;
         for (const auto& r : robots) {
-            if (r.currentPos.y == 10 && r.currentPos.x == x) {
+
+            // 如果某辆车真的横在这一格，并且它【仍然处于送货或排队状态】
+            // 注意：如果它的状态是 UNLOADING 或者是 RETURNING_BUFFER，它已经不属于“排队等待分配”的车了！
+            // 但是在 (18,10) 正在卸货的车，依然要占住 18 号位，不让后车追尾。
+            if (r.status == RobotStatus::UNLOADING && x == 18) {
                 isOccupied = true;
                 break;
             }
-            if (r.status == RobotStatus::MOVING_TO_DELIVER && !r.pathQueue.empty() && r.pathQueue.back().y == 10 && r.pathQueue.back().x == x) {
-                isOccupied = true;
-                break;
+
+            // 如果其他车还在排队道上霸占着位置
+            if (r.status == RobotStatus::MOVING_TO_DELIVER) {
+                if (r.currentPos.y == 10 && r.currentPos.x == x) {
+                    isOccupied = true;
+                    break;
+                }
+                if (!r.pathQueue.empty() && r.pathQueue.back().y == 10 && r.pathQueue.back().x == x) {
+                    isOccupied = true;
+                    break;
+                }
             }
         }
+
         if (!isOccupied) {
-            return x; // 找到最靠前的黄金空位
+            return x; // 这一格是安全的黄金空位
         }
     }
-    return 15; // 全满时保底停在大门
+    return 15;
 }
 /**
  * @brief 系统主循环核心每帧逻辑驱动、状态机闭环及多车时间步强对齐核心函数
@@ -311,7 +324,7 @@ void WarehouseManager::updateAll() {
             // 触发高耗时时空 A* 寻路
             dispatchRobot(availableRobot->id, currentOrder->targetStationId);
 
-            // 🚨 锁定限流阀：本帧寻路名额已用完，后续逻辑或其他车辆本帧严禁寻路！
+            //  锁定限流阀：本帧寻路名额已用完，后续逻辑或其他车辆本帧严禁寻路！
             pathCalculatedThisFrame = true;
         }
     }
@@ -348,25 +361,112 @@ void WarehouseManager::updateAll() {
             }
         }
 
-        // ---------- 阶段二：送货路上与【新大门门禁动态排队】 ----------
+        // ---------- 阶段二：送货路上与【新大门门禁刚性逐格递补（防超车穿模版）】 ----------
         else if (r.status == RobotStatus::MOVING_TO_DELIVER) {
 
-            // 当小车肉体真正踩到了新大门 (15, 10)，且去大门的路径已经走完
-            if (r.currentPos == Point(15, 10) && r.pathQueue.empty()) {
+            // 🌟【第一步：触头检测】：只要肉体踩到 (18, 10) 且路径空了，立刻强转卸货状态
+            if (r.currentPos == Point(18, 10) && r.pathQueue.empty()) {
+                r.status = RobotStatus::UNLOADING;
+                r.workCooldown = 40;
+                continue;
+            }
 
-                // 动态扫描 15~18，看看最前面哪个位置空着
-                int realTargetX = getNextAvailableQueueX_AtGate(robots);
+            // 🌟【第二步：刚性逐格看前车递补】：针对卡在直道排队区（15~17, 10）且没有路径的后车
+            if (r.currentPos.y == 10 && r.currentPos.x >= 15 && r.currentPos.x <= 17 && r.pathQueue.empty()) {
 
-                // 如果前方有空位（即算出来的目标列大于大门 15）
-                if (realTargetX > 15) {
-                    std::vector<Point> queueStraightPath;
-                    // 刚性驱动：从 16 开始硬写向右的直线路径，绝对不走 A* 寻路
-                    for (int x = 16; x <= realTargetX; ++x) {
-                        queueStraightPath.push_back(Point(x, 10));
+                // 我正前方的格子坐标
+                int nextX = r.currentPos.x + 1;
+                bool nextCellOccupied = false;
+
+                // 扫描全场，看看我正前方那一格有没有任何车的肉体或路径终点在驻留
+                for (const auto& other : robots) {
+                    // 正在卸货的车占用 18
+                    if (other.status == RobotStatus::UNLOADING && nextX == 18) {
+                        nextCellOccupied = true;
+                        break;
                     }
-                    r.setPath(queueStraightPath);
+                    // 还在排队序列中的车
+                    if (other.status == RobotStatus::MOVING_TO_DELIVER) {
+                        // 如果它的当前位置正好在我前面
+                        if (other.currentPos.y == 10 && other.currentPos.x == nextX) {
+                            nextCellOccupied = true;
+                            break;
+                        }
+                        // 或者它已经有了路径，且路径的最后终点是我的正前方
+                        if (!other.pathQueue.empty() && other.pathQueue.back().y == 10 && other.pathQueue.back().x == nextX) {
+                            nextCellOccupied = true;
+                            break;
+                        }
+                    }
                 }
-                // 如果算出来就是 15 本身，说明前面全卡满了，小车就老老实实卡在 (15, 10) 大门口死等
+
+                // 🔥【核心秩序】：只有当我正前方那一格是绝对空的时候，我才准往前挪动【一格】！
+                if (!nextCellOccupied) {
+                    std::vector<Point> stepForwardPath;
+                    stepForwardPath.push_back(Point(nextX, 10)); // 只向前硬灌一格路径，绝不多看多抢！
+
+                    r.pathQueue.clear();
+                    r.setPath(stepForwardPath);
+
+                    r.moveProgress = 0.0f;
+                    r.cellStepCompleted = false; // 强行激活肉体马达
+                }
+            }
+        }
+        // ---------- 阶段三：队头正忙，开始卸货 ----------
+        else if (r.status == RobotStatus::UNLOADING) {
+            if (r.workCooldown > 0) {
+                r.workCooldown--;
+            }
+            else {
+                // 【卸货完毕，触发 Y=9 侧边返回道离场流】
+                r.status = RobotStatus::RETURNING_BUFFER;
+
+                // 彻底关闭当前订单生命周期
+                orderSystem.completeOrder(r.currentOrderId);
+                r.currentOrderId = -1;
+
+                // 刚性构造脱离路径：垂直向上切入返回道 (18, 9)，然后沿 Y=9 一路向左撤离
+                std::vector<Point> escapePath;
+                escapePath.push_back(Point(18, 9)); // 侧边返回道起点（向上切入）
+                escapePath.push_back(Point(17, 9)); // 向左撤离
+                escapePath.push_back(Point(16, 9));
+                escapePath.push_back(Point(15, 9)); // 离开返回道边界
+                escapePath.push_back(Point(14, 9)); // 彻底脱离排队敏感大门区
+                r.setPath(escapePath);
+            }
+        }
+        // ---------- 阶段四：侧边道撤离中 / 执行后续决策 ----------
+        else if (r.status == RobotStatus::RETURNING_BUFFER) {
+            // 当小车顺着返回道完全走完了离场路径，到达了 (14, 9) 安全地带
+            if (r.pathQueue.empty()) {
+
+                Order* nextOrder = orderSystem.getFirstWaitingOrder();
+
+                if (nextOrder != nullptr) {
+                    // 🔄【无缝接单】
+                    nextOrder->status = OrderStatus::PROCESSING;
+                    r.status = RobotStatus::MOVING_TO_PICK;
+                    r.currentTargetStationId = nextOrder->targetStationId;
+                    r.currentOrderId = nextOrder->orderId;
+                    dispatchRobot(r.id, nextOrder->targetStationId);
+                }
+                else {
+                    // 🏠【无订单回巢】：改变策略，先回待命主干道
+                    r.status = RobotStatus::IDLE;
+                    r.currentTargetStationId = -1;
+
+                    Point homePos = { 0, 7 + r.id }; // 自己的出生点
+
+                    // 🌟【绝杀补丁】：不让 A* 去赌最后一步，先让 A* 寻路到家门口的前一格 (1, 7 + r.id)
+                    Point homeGate = { 1, 7 + r.id };
+                    std::vector<Point> toHomePath = Router::getPath(r.currentPos, homeGate, warehouseMap, globalTable, r.id, systemTick, false);
+
+                    // 把家门口路径放进去，然后【强行把最后一步老家肉体灌进去】
+                    toHomePath.push_back(homePos);
+
+                    r.setPath(toHomePath);
+                }
             }
         }
     }
