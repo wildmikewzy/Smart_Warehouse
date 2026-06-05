@@ -107,7 +107,21 @@ void WarehouseManager::setupScene() {
     Robot r2(2, { 0, 9 }); r2.status = RobotStatus::IDLE; robots.push_back(r2);
     Robot r3(3, { 0, 10 }); r3.status = RobotStatus::IDLE; robots.push_back(r3);
     Robot r4(4, { 0, 11 }); r4.status = RobotStatus::IDLE; robots.push_back(r4);
+    // =================================================================
+// 🌟【新增：静态全车雷达清单完美绑定】
+// =================================================================
+// 必须定义一个跟 Robot::allRobots 类型 (std::vector<Robot*>*) 完全匹配的常驻容器。
+// 使用 static 确保它的生命周期与整个程序执行周期一致，绝不随函数结束而析构。
+    static std::vector<Robot*> robotPointerList;
+    robotPointerList.clear();
 
+    // 将 robots 容器里【已经完成 push_back、内存地址固定了的】真实小车对象的地址抓取出来
+    for (auto& r : robots) {
+        robotPointerList.push_back(&r);
+    }
+
+    // 功德圆满！将这个指针容器的地址正式灌给静态成员
+    Robot::setRobotList(&robotPointerList);
     // 【防穿模机制：闲置占位霸占】
     // 小车在待命区未出勤时，必须在前瞻 2500 个时空Tick内强制写入时空预订表，防止其它出勤车穿模相撞
     for (auto& r : robots) {

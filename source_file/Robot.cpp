@@ -41,7 +41,9 @@ void Robot::setPath(const std::vector<Point>& newPath) {
 */
 void Robot::update() {
     cellStepCompleted = false; // 每帧开始前重置单格跨越完成信号
-
+    // 如果 this 已经是 nullptr，直接通过最外层调用拦截。
+    // 但为了防止极端的虚函数表崩溃或野指针，函数进来第一件事就是把所有的指针检查做全：
+    if (allRobots == nullptr) return;
     // ====================== 1. 业务装卸货/等待冷却处理 ======================
     if (status == RobotStatus::LOADING || status == RobotStatus::UNLOADING) {
         // 在装卸货期间，强行将视觉位置锁定在当前逻辑格
@@ -63,7 +65,32 @@ void Robot::update() {
         moveProgress = 0.0f;
         return;
     }
+    // 【针对指针型 vector 指针的完美解引用】
+    // 1. 在 allRobots 前面加一个 * 号，代表“顺着指针找到那个真正的 vector 容器”
+    bool visualBlocked = false;
+    Point nextPos = pathQueue.front(); // 我下一步要去的格子
 
+    for (const auto& otherPtr : *allRobots) {
+        // 2. 安全检查：防止容器里有空指针
+        if (otherPtr == nullptr) continue;
+
+        // 3. 因为 vector 里装的是 Robot*，所以 otherPtr 是个指针，用 ->id 和自身指针比较
+        if (otherPtr == this) continue;
+
+        // 4. 用 -> 访问前方小车的坐标和动画进度
+        if (otherPtr->currentPos == nextPos) {
+            // 如果前车的转弯/直线动画还没完全拉开空间（屁股还没挪干净）
+            if (otherPtr->moveProgress < 0.8f) {
+                visualBlocked = true;
+                break;
+            }
+        }
+    }
+
+    if (visualBlocked) {
+        // 触发渲染暂停视觉保护：本帧不累加动画进度，在屏幕上微微一顿，等待前车走开
+        return;
+    }
     if (moveCooldown > 0) {
         moveCooldown--;
         return;

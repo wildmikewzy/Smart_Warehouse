@@ -12,7 +12,7 @@ using namespace std;
 
 class WarehouseManager {
 private:
-    vector<Robot> robots;               // 管理的机器人列表
+    //vector<Robot> robots;               // 管理的机器人列表
     Map warehouseMap;                   // 仓库的地图数据
     ReservationTable globalTable;       // 全局时空预定表，用于规避多车抢点
     int systemTick;                     // 全局系统时间戳（逻辑步数）
@@ -23,6 +23,7 @@ private:
     int gridToStationCache[20][20];     // 空间坐标到站点 ID 的快速检索表
 
 public:
+    vector<Robot> robots;               // 管理的机器人列表
     WarehouseManager();                 // 仓库构造函数
     void setupScene();                  // 初始化：放置机器人、货架并生成解耦站点
 
