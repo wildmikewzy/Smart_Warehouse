@@ -35,7 +35,7 @@ public:
     int currentStepFrames;  // 当前速度级别下，走一格所需的标准帧数（越小越快）
 
     // 新增工作状态冷却时间与绑定的订单任务
-    int workCooldown = 0;   // 操作冷却（如装载卸载的时间）
+    int workCooldown = 0;   // 操作冷却（装载和卸载的时间）
     int currentTargetStationId = -1;  // 当前正在处理的站点目标
 
     // 当前绑定的业务订单源 ID

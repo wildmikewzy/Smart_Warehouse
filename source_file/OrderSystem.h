@@ -7,10 +7,10 @@
 enum class OrderStatus { WAITING, PROCESSING, FINISHED };
 
 struct Order {  
-    int orderId;
-    int targetStationId;
-    SKUType sku;
-    OrderStatus status;
+    int orderId;        //订单编号
+	int targetStationId;        //目标货架站点 ID
+	SKUType sku;        //订单物料 SKU 类型
+	OrderStatus status;     //订单状态：等待派发、正在处理、已完成
 };
 
 class OrderSystem {

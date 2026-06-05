@@ -10,6 +10,7 @@ struct Point {
     bool operator == (const Point& other) const {
         return x == other.x && y == other.y;
     }
+	Point(int _x = 0, int _y = 0) : x(_x), y(_y) {}
 };
 
 // 升级版：工业 AGV 业务全生命周期状态机
@@ -19,7 +20,8 @@ enum class RobotStatus {
     LOADING,            // 到达取货点，正在装货锁定中
     MOVING_TO_DELIVER,  // 装货完毕，正携货前往出货口
     UNLOADING,          // 到达出货口，正在卸货锁定中
-    ERROR_
+    RETURNING_BUFFER,       //出货完毕，前往返回缓冲区
+    ERROR_      //机器人错误状态
 };
 
 enum class SKUType { A, B, C };

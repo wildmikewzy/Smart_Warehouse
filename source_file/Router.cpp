@@ -99,6 +99,9 @@ vector<Point> Router::getPath(Point start, Point end, const Map& map,
 
     // A* 最高搜索深容忍防死环
     int maxTimeWindow = startTime + 100;
+    if (end.x == 18 && end.y == 10) {
+		maxTimeWindow = startTime + 500;    // 目标是出货口的时候，适当放宽搜索深度容忍度
+    }
 
     while (!pq.empty()) {
         STNode current = pq.top();
@@ -122,7 +125,17 @@ vector<Point> Router::getPath(Point start, Point end, const Map& map,
 
             if (px < 0 || px >= MAP_LENGTH || py < 0 || py >= MAP_WIDTH) continue;
             if (!map.isWalkable(px, py)) continue; // 坚决不能踩障碍物
-
+            // =================================================================
+            // 🌟【排队道隔离绝对实体墙】：以 (15,10) 为大门的动态封锁
+            // =================================================================
+            // 如果这辆车本次寻路的目标点 end 确实是新大门 (15, 10)
+            if (end.x == 15 && end.y == 10) {
+                // 在它还没安全到达大门之前，排队直道的核心内部 (16~18, 10) 对它而言是不可通行的！
+                if (py == 10 && px >= 16 && px <= 18) {
+                    continue; // 强行逼迫 A* 从外部绕行，严禁从右向左横穿排队线
+                }
+            }
+            // =================================================================
             std::string reverseEdgeKey = to_string(px) + "," + to_string(py) + "->" +
                 to_string(current.pt.x) + "," + to_string(current.pt.y) + "@" + to_string(nextT);
             if (table.edgeReservations.count(reverseEdgeKey) > 0) {
@@ -134,10 +147,10 @@ vector<Point> Router::getPath(Point start, Point end, const Map& map,
             }
 
             int edgeCost = 1;
-            int turnPenalty = 0;
+            int turnPenalty = 0;        //转弯惩罚，杜绝锯齿状路径
 
             if (i == 4) {
-                edgeCost = 2; // 原地等待代价
+                edgeCost = 1; // 原地等待代价
             }
             else {
                 if (parent.find(currKey) != parent.end()) {

@@ -36,15 +36,14 @@ void Robot::setPath(const std::vector<Point>& newPath) {
         moveCooldown = 0;  // 立即开始
     }
 }
-
+/**
+* @brief Robot 的核心更新函数，负责处理移动、装卸货逻辑以及视觉坐标的平滑插值
+*/
 void Robot::update() {
     cellStepCompleted = false; // 每帧开始前重置单格跨越完成信号
 
     // ====================== 1. 业务装卸货/等待冷却处理 ======================
     if (status == RobotStatus::LOADING || status == RobotStatus::UNLOADING) {
-        if (workCooldown > 0) {
-            workCooldown--;
-        }
         // 在装卸货期间，强行将视觉位置锁定在当前逻辑格
         realX = static_cast<float>(currentPos.x);
         realY = static_cast<float>(currentPos.y);
