@@ -8,6 +8,9 @@
 #include "HungarianOptimizer.h"
 #include <map>
 #include <cmath>
+#include "Robot.h"
+#include "GUI.h"
+
 /**
  * @brief WarehouseManager 的构造函数
  * @param 无
@@ -269,7 +272,7 @@ int getNextAvailableQueueX_AtGate(const std::vector<Robot>& robots) {
  * @brief 系统主循环核心每帧逻辑驱动、状态机闭环及多车时间步强对齐核心函数
  * @details 完美修复“先回巢再接单”硬伤，实现就近无缝运筹派单
  */
-void WarehouseManager::updateAll() {
+void WarehouseManager::updateAll(GUI & gui) {
     // ====================================================================
 	// 测试阶段：初始生成4个随机生成 4 个订单 ，并且按 T 键可以刷新随机订单
     // ====================================================================
@@ -321,6 +324,18 @@ void WarehouseManager::updateAll() {
 
          //4. 重置系统总时钟（可选）：让两边的性能对比都从同一个时间起点起跑
          systemTick = 0; 
+         globalSystemTick = 0; // 重置全局系统时钟
+         totalCompletedOrders = 0; // 重置已完成订单数
+         totalOrderDuration = 0; // 重置总订单耗时
+         // 🌟【核心对齐】：4.5 步 —— 时钟归零后，批量刷新这 20 个订单的出生时刻！
+    // 这样这 20 个压测单的 createTick 也会全部精准变成 0，与全新的压测跑道完全同步！
+    // (注：这里的 orderSystem.getAllOrders() 需要替换为你代码中获取订单容器/列表的实际接口名)
+         for (auto& order : orderSystem.getAllOrders()) {
+             this->onOrderCreated(order);
+         }
+         // 🌟【核心联动】：标记压测正式开始，且尚未生成报告
+         this->isStressTesting = true;
+         this->hasReportedMetrics = false;
     }
     lastPState = currentPState; // 更新按键历史状态
     // ==================================================
@@ -496,10 +511,18 @@ void WarehouseManager::updateAll() {
         }
         // ---------- 阶段三：队头正忙，开始卸货 ----------
         else if (r.status == RobotStatus::UNLOADING) {
+
             if (r.workCooldown > 0) {
                 r.workCooldown--;
             }
             else {
+                // 🌟【核心新增】：在订单被销毁前，先通过 ID 捞出订单数据，结算生命周期
+                // （注：此处假设你的 orderSystem 有通过 ID 获取订单引用的接口，例如 getOrderById）
+                if (r.currentOrderId != -1) {
+                    // 建议加个安全检查，防止空指针或越界
+                    const Order& finishedOrder = *orderSystem.getOrderById(r.currentOrderId);
+                    this->onOrderFinished(finishedOrder);
+                }
                 r.status = RobotStatus::RETURNING_BUFFER;
                 orderSystem.completeOrder(r.currentOrderId);
                 r.currentOrderId = -1;
@@ -539,6 +562,29 @@ void WarehouseManager::updateAll() {
     // 4. 时钟步进脉冲控制
     if (anyRobotLogicStepped || anyRobotWorking) {
         systemTick++;
+        this->globalSystemTick++;
+    }
+    // 🌟【核心捕获】：检测 20 个压测订单是否全部功德圆满
+    if (this->isStressTesting && !this->hasReportedMetrics && this->totalCompletedOrders == 20) {
+
+        // 1. 立刻锁死旗帜，确保该 if 块在整个压测生命周期里【只进一次】
+        this->hasReportedMetrics = true;
+        this->isStressTesting = false; // 压测宣告结束
+
+        // 2. 调用刚才写好的全盘指标解算函数
+        LogisticsMetrics res = this->calculateMetrics();
+
+        // 3. 格式化组装三行文本字符串
+        char str1[128], str2[128], str3[128];
+        sprintf_s(str1, "[压测报告] 综合空驶率: %.1f%%", res.emptyRunningRate);
+        sprintf_s(str2, "[性能监控] 平均结单耗时: %.1f Ticks", res.avgOrderCompletionTime);
+        sprintf_s(str3, "[吞吐效能] 系统当前吞吐: %.2f 单/K-Ticks", res.throughputPerKGrid);
+
+        // 4. 将它们刚性注入你的 GUI 弹窗队列（设置 15.0f 秒长效显示，方便截图调优）
+        // 注：根据你的架构，如果 GUI 是全局变量直接调用即可；若是成员变量请通过指针/引用调用
+        gui.addPopup(str1, 15.0f);
+        gui.addPopup(str2, 15.0f);
+        gui.addPopup(str3, 15.0f);
     }
 }
 /**
@@ -624,4 +670,47 @@ void WarehouseManager::dispatchOrdersByHungarian() {
             this->dispatchRobot(robot->id, order->targetStationId);
         }
     }
+}
+// ② 在订单系统（OrderSystem）生成订单并推入 WMS 的地方调用
+void WarehouseManager::onOrderCreated(Order& order) {
+    order.createTick = this->globalSystemTick; // 赋予订单诞生时间戳
+}
+
+// ③ 在小车将货架送达出货口（即进入 UNLOADING 结算，或者订单被销毁的瞬间）调用
+void WarehouseManager::onOrderFinished(const Order& order) {
+    this->totalCompletedOrders++;
+    // 当前时钟减去诞生时钟，就是这一单的纯粹生命周期
+    int duration = this->globalSystemTick - order.createTick;
+    this->totalOrderDuration += duration;
+}
+
+// ④ 🌟 核心：动态计算三大指标的函数（做好了防除零保护）
+WarehouseManager::LogisticsMetrics WarehouseManager::calculateMetrics() {
+    LogisticsMetrics metrics{ 0.0, 0.0, 0.0 };
+
+    // 1. 计算全盘综合空驶率
+    int aggregateTotalGrids = 0;
+    int aggregateEmptyGrids = 0;
+    for (const auto& robot : robots) {
+        aggregateTotalGrids += robot.totalGridsWalked;
+        aggregateEmptyGrids += robot.emptyGridsWalked;
+    }
+    if (aggregateTotalGrids > 0) {
+        metrics.emptyRunningRate = (static_cast<double>(aggregateEmptyGrids) / aggregateTotalGrids) * 100.0;
+    }
+
+    // 2. 计算平均订单完成耗时
+    if (totalCompletedOrders > 0) {
+        metrics.avgOrderCompletionTime = static_cast<double>(totalOrderDuration) / totalCompletedOrders;
+    }
+
+    // 3. 计算单位时间（每 1000 Ticks）的系统吞吐量
+    if (globalSystemTick > 0) {
+        metrics.throughputPerKGrid = (static_cast<double>(totalCompletedOrders) * 1000.0) / globalSystemTick;
+    }
+    std::cout << "[Debug 看板数据] 总完单: " << totalCompletedOrders
+        << " | 总耗时: " << totalOrderDuration
+        << " | WMS当前时钟: " << globalSystemTick << std::endl;
+
+    return metrics;
 }

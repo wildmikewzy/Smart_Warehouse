@@ -5,7 +5,7 @@
 #include <string>
 #include <list>
 #include <chrono>
-
+class WarehouseManager;     // 前向声明，避免循环依赖
 struct PopupMessage {
     std::string text;
     float lifetime;

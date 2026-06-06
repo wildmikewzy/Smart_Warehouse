@@ -161,7 +161,7 @@ void Robot::update() {
     if (moveProgress >= 1.0f) {
         // 当进度条充满，说明小车这一个格子已经在视觉上完全走完
         moveProgress = 1.0f;
-
+        this->recordGridMovement();
         // 真正的物理坐标在一帧内跨越到新格子
         currentPos = target;
         lastPos = currentPos; // 滚动起点基准
@@ -187,3 +187,13 @@ void Robot::update() {
     realX = static_cast<float>(lastPos.x) + (static_cast<float>(target.x) - static_cast<float>(lastPos.x)) * moveProgress;
     realY = static_cast<float>(lastPos.y) + (static_cast<float>(target.y) - static_cast<float>(lastPos.y)) * moveProgress;
 }
+void Robot::recordGridMovement() {
+    // 只有在实际发生网格位移的状态下才计数
+    if (status == RobotStatus::MOVING_TO_PICK || status == RobotStatus::RETURNING_BUFFER) {
+        totalGridsWalked++;
+        emptyGridsWalked++;
+    }
+    else if (status == RobotStatus::MOVING_TO_DELIVER) {
+        totalGridsWalked++;
+    }
+    }

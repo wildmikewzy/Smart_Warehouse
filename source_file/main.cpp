@@ -29,7 +29,7 @@ int main() {
 
 		// 【第二步】：业务推进（定时心跳更新）
 		if (currentTime - lastLogicTime >= LOGIC_INTERVAL_MS) {
-			manager.updateAll();
+			manager.updateAll(gui);
 			lastLogicTime = currentTime;
 		}
 

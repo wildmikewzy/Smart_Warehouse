@@ -7,7 +7,7 @@
 #include <vector>
 #include <map>
 #include <utility>
-
+class GUI;      // 前向声明，避免循环依赖
 using namespace std;
 
 class WarehouseManager {
@@ -21,6 +21,13 @@ private:
     OrderSystem orderSystem;            // 引入订单大脑
     std::map<int, Station> stations;    // 管理所有的货架拓扑站点
     int gridToStationCache[20][20];     // 空间坐标到站点 ID 的快速检索表
+    // 🌟 新增：全局效能统计大盘
+    int globalSystemTick = 0;        // 全局系统时钟（每帧++）
+    int totalCompletedOrders = 0;    // 系统总共完成的订单数
+    long long totalOrderDuration = 0; // 所有已完成订单的生存周期Tick总和
+    // 🌟 新增：压测弹窗专用的状态控制旗帜
+    bool isStressTesting = false;      // 当前是否正处于 P 键压测过程中
+    bool hasReportedMetrics = false;   // 本轮压测是否已经弹出过报告
 
 public:
     vector<Robot> robots;               // 管理的机器人列表
@@ -30,7 +37,7 @@ public:
     // 传入机器人ID和业务层指定的站点ID
     void dispatchRobot(int robotId, int stationId);
 
-    void updateAll();                   // 每帧逻辑更新
+    void updateAll(GUI & gui);                   // 每帧逻辑更新
 
     // 重置机器人和全局时空表（用于极端测试）
     void prepareStressTest(const std::vector<std::pair<int, Point>>& placements);
@@ -54,4 +61,15 @@ public:
     Station getStationById(int stationId) {
         return stations[stationId];
     }
+    // 🌟 新增：打包当前所有核心指标的结构体，方便后续弹窗直接读取
+    struct LogisticsMetrics {
+        double emptyRunningRate;     // 空驶率 (%)
+        double avgOrderCompletionTime;// 平均订单完成耗时 (Ticks/单)
+        double throughputPerKGrid;   // 单位时间吞吐量 (单/1000 Ticks)
+    };
+
+    void update();
+    void onOrderCreated(Order& order);
+    void onOrderFinished(const Order& order);
+    LogisticsMetrics calculateMetrics();
 };

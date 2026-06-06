@@ -45,4 +45,9 @@ public:
     Point lastPos;               // 记录当前运动网格区间的“起点格”
     float moveProgress = 0.0f;   // 当前格子区间的平滑进度 (0.0f 到 1.0f)
     bool cellStepCompleted = false; // 标志位：是否在当前帧刚刚完成了“一整格”的跨越
+    // 🌟 新增：物流效率统计指标
+    int totalGridsWalked = 0; // 总行驶格子数
+    int emptyGridsWalked = 0; // 空驶格子数
+    // 🌟 新增：每走完一格时的记账函数
+    void recordGridMovement();
 };

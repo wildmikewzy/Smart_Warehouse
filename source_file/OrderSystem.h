@@ -12,6 +12,7 @@ struct Order {
 	SKUType sku;        //订单物料 SKU 类型
 	OrderStatus status;     //订单状态：等待派发、正在处理、已完成
     int waitTicks = 0;      // 订单等待更新的帧数计数器
+    int createTick = 0; // 订单创建时的系统时钟（Tick数）
 };
 
 class OrderSystem {
@@ -29,7 +30,7 @@ public:
 	Order* getOrderById(int orderId); // 根据订单 ID 获取订单指针，供调度系统查询订单状态
     Order* createNewOrder(int targetStationId,SKUType sku);    // 鼠标点击货架时，动态定向生成新订单，并返回该新订单的肉体指针
     void updateOrderTicks(); // 每帧更新等待中订单的饥饿计数器
-    // 获取当前所有订单快照以供 GUI 渲染
+    // 获取当前所有订单快照
     std::vector<Order> getAllOrders() const {
         std::vector<Order> orders;
         for (const auto& o : activeOrders) {
