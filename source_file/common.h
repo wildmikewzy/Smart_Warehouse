@@ -1,5 +1,4 @@
 ﻿#pragma once
-#pragma once
 
 #include <vector>
 #include <cmath>
@@ -32,6 +31,7 @@ struct Station {
     Point shelfPoint;   // 实体货架网格坐标 (障碍物)
     Point dockPoint;    // 小车取货时的靠泊通行网格坐标 (通道)
     SKUType sku;        // 该货架存放的货物类型
+
 };
 
 // === 坐标系协议 ===

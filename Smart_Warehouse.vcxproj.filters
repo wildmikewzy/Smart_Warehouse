@@ -35,6 +35,9 @@
     <ClCompile Include="source_file\OrderSystem.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="source_file\HungarianOptimizer.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="source_file\common.h">
@@ -56,6 +59,9 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="source_file\OrderSystem.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="source_file\HungarianOptimizer.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

@@ -132,3 +132,13 @@ Order* OrderSystem::getOrderById(int orderId) {
     }
     return nullptr; // 防御保护，没找到安全返回空
 }
+/**
+ * @brief  每帧更新等待中订单的饥饿计数器
+ */
+void OrderSystem::updateOrderTicks() {
+    for (auto& o : activeOrders) {
+        if (o.status == OrderStatus::WAITING) {
+            o.waitTicks++; // 处于等待队列中的订单痛苦指数随时间递增
+        }
+    }
+}

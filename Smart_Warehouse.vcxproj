@@ -124,6 +124,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="source_file\GUI.cpp" />
+    <ClCompile Include="source_file\HungarianOptimizer.cpp" />
     <ClCompile Include="source_file\main.cpp" />
     <ClCompile Include="source_file\Map.cpp" />
     <ClCompile Include="source_file\OrderSystem.cpp" />
@@ -134,6 +135,7 @@
   <ItemGroup>
     <ClInclude Include="source_file\common.h" />
     <ClInclude Include="source_file\GUI.h" />
+    <ClInclude Include="source_file\HungarianOptimizer.h" />
     <ClInclude Include="source_file\Map.h" />
     <ClInclude Include="source_file\OrderSystem.h" />
     <ClInclude Include="source_file\Robot.h" />

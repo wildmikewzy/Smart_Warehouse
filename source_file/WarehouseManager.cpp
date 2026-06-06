@@ -5,7 +5,9 @@
 #include <windows.h>
 #include "WarehouseManager.h"
 #include "common.h"
-
+#include "HungarianOptimizer.h"
+#include <map>
+#include <cmath>
 /**
  * @brief WarehouseManager 的构造函数
  * @param 无
@@ -265,13 +267,11 @@ int getNextAvailableQueueX_AtGate(const std::vector<Robot>& robots) {
 }
 /**
  * @brief 系统主循环核心每帧逻辑驱动、状态机闭环及多车时间步强对齐核心函数
- * @param 无
- * @retval 无
- * @details 扮演仓储系统的 WMS 控制大脑与中央时钟源。每帧按顺序触发：
+ * @details 完美修复“先回巢再接单”硬伤，实现就近无缝运筹派单
  */
 void WarehouseManager::updateAll() {
     // ==========================================
-    // 测试阶段：只生成 4 个初始订单
+    // 测试阶段：只生成 4 个初始订单 (保持原样)
     // ==========================================
     static bool ordersGenerated = false;
     if (!ordersGenerated) {
@@ -284,54 +284,101 @@ void WarehouseManager::updateAll() {
             for (int i = 0; i < 4; ++i) {
                 orderSystem.generateRandomOrder(validShelfIds);
             }
-            ordersGenerated = true; // 锁死，目前只生成4个订单
+            ordersGenerated = true;
         }
     }
-    static bool lastTState = false; // 记录上一帧 T 键是否被按下
-    bool currentTState = (GetAsyncKeyState('T') & 0x8000) != 0; // 当前帧 T 键状态
+    static bool lastTState = false;
+    bool currentTState = (GetAsyncKeyState('T') & 0x8000) != 0;
 
-    // 只有当“上一帧没按”且“这一帧按了”时，才判定为真正按下（单次敲击）
     if (currentTState && !lastTState) {
-        // 2. 重置生成开关，允许在下一帧精准触发 4 个新订单
         ordersGenerated = false;
     }
-
-    lastTState = currentTState; // 更新按键历史状态，为下一帧做准备
+    lastTState = currentTState;
 
     // ==================================================
-    // 【核心新增控制】：单帧时空 A* 寻路限流阀
+    // 【时空 A* 寻路限流阀】
     // ==================================================
-	bool pathCalculatedThisFrame = false;       //节流阀：本帧是否已经有车触发过寻路了
+    bool pathCalculatedThisFrame = false;
 
-    // 1. 核心调度轮询：不断抓取等待中的订单分发给空闲车
-    Order* currentOrder = orderSystem.getFirstWaitingOrder();
-    // 🚨 【增加限制】：如果本帧还没有进行过寻路，才允许抓取并分发新订单
-    if (currentOrder != nullptr && !pathCalculatedThisFrame) {
-        Robot* availableRobot = nullptr;
+    // 每帧滚动等待中订单的痛苦指数
+    orderSystem.updateOrderTicks();
+
+    // ==================================================
+    // 🌟【运筹调度层】：基于匈牙利算法的全局集中匹配
+    // ==================================================
+    if (!pathCalculatedThisFrame) {
+
+        // 1. 抓取真正能接单的车（状态为 IDLE 且没有紧急任务路径）
+        std::vector<Robot*> freeRobots;
         for (auto& r : robots) {
-            if (r.status == RobotStatus::IDLE) {
-                availableRobot = &r;
-                break;
+            if (r.status == RobotStatus::IDLE && r.pathQueue.empty()) {
+                freeRobots.push_back(&r);
             }
         }
 
-        if (availableRobot != nullptr) {
-            currentOrder->status = OrderStatus::PROCESSING;
-            availableRobot->status = RobotStatus::MOVING_TO_PICK;
-            availableRobot->currentTargetStationId = currentOrder->targetStationId;
-            availableRobot->currentOrderId = currentOrder->orderId;
+        std::vector<Order*> waitingOrders;
+        for (auto& o : orderSystem.getNonConstActiveOrders()) {
+            if (o.status == OrderStatus::WAITING) {
+                waitingOrders.push_back(&o);
+            }
+        }
 
-            // 触发高耗时时空 A* 寻路
-            dispatchRobot(availableRobot->id, currentOrder->targetStationId);
+        // 2. 只有当“有车闲着”且“有单等着”时，才启动数学矩阵计算
+        if (!freeRobots.empty() && !waitingOrders.empty()) {
+            int nRows = (int) freeRobots.size();
+            int nCols = (int)waitingOrders.size();
+            std::vector<std::vector<int>> costMatrix(nRows, std::vector<int>(nCols, 0));
 
-            //  锁定限流阀：本帧寻路名额已用完，后续逻辑或其他车辆本帧严禁寻路！
-            pathCalculatedThisFrame = true;
+            const int TIME_WEIGHT = 2;
+
+            for (int i = 0; i < nRows; ++i) {
+                for (int j = 0; j < nCols; ++j) {
+                    int stationId = waitingOrders[j]->targetStationId;
+                    Station targetStation = this->getStationById(stationId);
+                    Point dockPos = targetStation.dockPoint;
+
+                    // 🌟【就近核心】：此时由于小车可能在 (14,9) 刚送完货，这里计算出来的曼哈顿距离就是小车在送货口附近的实时距离！
+                    int curX = static_cast<int>(freeRobots[i]->realX + 0.5f);
+                    int curY = static_cast<int>(freeRobots[i]->realY + 0.5f);
+                    int manhattanDist = abs(curX - dockPos.x) + abs(curY - dockPos.y);
+
+                    int cost = manhattanDist * 10 - (waitingOrders[j]->waitTicks / TIME_WEIGHT);
+                    costMatrix[i][j] = (cost > 0) ? cost : 0;
+                }
+            }
+
+            HungarianOptimizer optimizer;
+            std::vector<int> assignment;
+            optimizer.solve(costMatrix, assignment);
+
+            for (int i = 0; i < nRows; ++i) {
+                int assignedOrderIdx = assignment[i];
+                if (assignedOrderIdx != -1 && assignedOrderIdx < nCols) {
+                    Robot* robot = freeRobots[i];
+                    Order* order = waitingOrders[assignedOrderIdx];
+
+                    if (!pathCalculatedThisFrame) {
+                        order->status = OrderStatus::PROCESSING;
+                        robot->status = RobotStatus::MOVING_TO_PICK;
+                        robot->currentTargetStationId = order->targetStationId;
+                        robot->currentOrderId = order->orderId;
+
+                        // 核心：直接从小车当前所处的任何位置（包括排队撤离点）发起就近时空寻路！
+                        dispatchRobot(robot->id, order->targetStationId);
+
+                        pathCalculatedThisFrame = true;
+                        break;
+                    }
+                }
+            }
         }
     }
 
-    // 2. 高频驱动小车肉体动画插值，并捕获步进脉冲信号
+    // ==================================================
+    // 2. 高频驱动小车肉体动画插值 (保持原样)
+    // ==================================================
     bool anyRobotLogicStepped = false;
-    bool anyRobotWorking = false; // 【新增防御线】：记录有没有车正在原地工作
+    bool anyRobotWorking = false;
 
     for (auto& r : robots) {
         r.update();
@@ -340,8 +387,9 @@ void WarehouseManager::updateAll() {
             anyRobotWorking = true;
         }
     }
+
     // ==================================================
-    // 3. 核心改进：双轨硬核传送带状态机
+    // 3. 双轨硬核传送带状态机
     // ==================================================
     for (auto& r : robots) {
         // ---------- 阶段一：去货架取货与装载 ----------
@@ -354,45 +402,34 @@ void WarehouseManager::updateAll() {
                 r.workCooldown--;
             }
             else {
-                // 装货结束！终点死死锁定为新大门 (15, 10)
                 r.status = RobotStatus::MOVING_TO_DELIVER;
                 std::vector<Point> toGatePath = Router::getPath(r.currentPos, Point(15, 10), warehouseMap, globalTable, r.id, systemTick, false);
                 r.setPath(toGatePath);
             }
         }
 
-        // ---------- 阶段二：送货路上与【新大门门禁刚性逐格递补（防超车穿模版）】 ----------
+        // ---------- 阶段二：送货路上与门禁靠泊递补排队 ----------
         else if (r.status == RobotStatus::MOVING_TO_DELIVER) {
-
-            // 🌟【第一步：触头检测】：只要肉体踩到 (18, 10) 且路径空了，立刻强转卸货状态
             if (r.currentPos == Point(18, 10) && r.pathQueue.empty()) {
                 r.status = RobotStatus::UNLOADING;
                 r.workCooldown = 40;
                 continue;
             }
 
-            // 🌟【第二步：刚性逐格看前车递补】：针对卡在直道排队区（15~17, 10）且没有路径的后车
             if (r.currentPos.y == 10 && r.currentPos.x >= 15 && r.currentPos.x <= 17 && r.pathQueue.empty()) {
-
-                // 我正前方的格子坐标
                 int nextX = r.currentPos.x + 1;
                 bool nextCellOccupied = false;
 
-                // 扫描全场，看看我正前方那一格有没有任何车的肉体或路径终点在驻留
                 for (const auto& other : robots) {
-                    // 正在卸货的车占用 18
                     if (other.status == RobotStatus::UNLOADING && nextX == 18) {
                         nextCellOccupied = true;
                         break;
                     }
-                    // 还在排队序列中的车
                     if (other.status == RobotStatus::MOVING_TO_DELIVER) {
-                        // 如果它的当前位置正好在我前面
                         if (other.currentPos.y == 10 && other.currentPos.x == nextX) {
                             nextCellOccupied = true;
                             break;
                         }
-                        // 或者它已经有了路径，且路径的最后终点是我的正前方
                         if (!other.pathQueue.empty() && other.pathQueue.back().y == 10 && other.pathQueue.back().x == nextX) {
                             nextCellOccupied = true;
                             break;
@@ -400,16 +437,13 @@ void WarehouseManager::updateAll() {
                     }
                 }
 
-                // 🔥【核心秩序】：只有当我正前方那一格是绝对空的时候，我才准往前挪动【一格】！
                 if (!nextCellOccupied) {
                     std::vector<Point> stepForwardPath;
-                    stepForwardPath.push_back(Point(nextX, 10)); // 只向前硬灌一格路径，绝不多看多抢！
-
+                    stepForwardPath.push_back(Point(nextX, 10));
                     r.pathQueue.clear();
                     r.setPath(stepForwardPath);
-
                     r.moveProgress = 0.0f;
-                    r.cellStepCompleted = false; // 强行激活肉体马达
+                    r.cellStepCompleted = false;
                 }
             }
         }
@@ -419,59 +453,128 @@ void WarehouseManager::updateAll() {
                 r.workCooldown--;
             }
             else {
-                // 【卸货完毕，触发 Y=9 侧边返回道离场流】
                 r.status = RobotStatus::RETURNING_BUFFER;
-
-                // 彻底关闭当前订单生命周期
                 orderSystem.completeOrder(r.currentOrderId);
                 r.currentOrderId = -1;
 
-                // 刚性构造脱离路径：垂直向上切入返回道 (18, 9)，然后沿 Y=9 一路向左撤离
                 std::vector<Point> escapePath;
-                escapePath.push_back(Point(18, 9)); // 侧边返回道起点（向上切入）
-                escapePath.push_back(Point(17, 9)); // 向左撤离
+                escapePath.push_back(Point(18, 9));
+                escapePath.push_back(Point(17, 9));
                 escapePath.push_back(Point(16, 9));
-                escapePath.push_back(Point(15, 9)); // 离开返回道边界
-                escapePath.push_back(Point(14, 9)); // 彻底脱离排队敏感大门区
+                escapePath.push_back(Point(15, 9));
+                escapePath.push_back(Point(14, 9));
                 r.setPath(escapePath);
             }
         }
-        // ---------- 阶段四：侧边道撤离中 / 执行后续决策 ----------
+        // ---------- 阶段四：侧边道撤离完毕决策点 ----------
         else if (r.status == RobotStatus::RETURNING_BUFFER) {
-            // 当小车顺着返回道完全走完了离场路径，到达了 (14, 9) 安全地带
             if (r.pathQueue.empty()) {
-
-                Order* nextOrder = orderSystem.getFirstWaitingOrder();
-
-                if (nextOrder != nullptr) {
-                    // 🔄【无缝接单】
-                    nextOrder->status = OrderStatus::PROCESSING;
-                    r.status = RobotStatus::MOVING_TO_PICK;
-                    r.currentTargetStationId = nextOrder->targetStationId;
-                    r.currentOrderId = nextOrder->orderId;
-                    dispatchRobot(r.id, nextOrder->targetStationId);
-                }
-                else {
-                    // 🏠【无订单回巢】：改变策略，先回待命主干道
-                    r.status = RobotStatus::IDLE;
-                    r.currentTargetStationId = -1;
-
-                    Point homePos = { 0, 7 + r.id }; // 自己的出生点
-
-                    // 🌟【绝杀补丁】：不让 A* 去赌最后一步，先让 A* 寻路到家门口的前一格 (1, 7 + r.id)
-                    Point homeGate = { 1, 7 + r.id };
-                    std::vector<Point> toHomePath = Router::getPath(r.currentPos, homeGate, warehouseMap, globalTable, r.id, systemTick, false);
-
-                    // 把家门口路径放进去，然后【强行把最后一步老家肉体灌进去】
-                    toHomePath.push_back(homePos);
-
-                    r.setPath(toHomePath);
-                }
+                // 🌟【超级进化】：到达安全区后，原地转为 IDLE 待命，但绝对不规划路径！
+                // 让它赤条条地进入下一帧，直接接受匈牙利算法的全局扫描
+                r.status = RobotStatus::IDLE;
+                r.currentTargetStationId = -1;
+            }
+        }
+        // ---------- 🌟【新增业务兜底】：真正无单可做时，车子才大后方回巢 ----------
+        else if (r.status == RobotStatus::IDLE && r.pathQueue.empty()) {
+            // 如果小车处于闲置状态，且经历过运筹层的扫描后依然没有被分发任务（说明订单池空了）
+            // 并且小车此时并不在自己的出生大本营，这时候再触发“防挂机回巢”机制
+            Point homePos = { 0, 7 + r.id };
+            if (r.currentPos.x != homePos.x || r.currentPos.y != homePos.y) {
+                Point homeGate = { 1, 7 + r.id };
+                std::vector<Point> toHomePath = Router::getPath(r.currentPos, homeGate, warehouseMap, globalTable, r.id, systemTick, false);
+                toHomePath.push_back(homePos);
+                r.setPath(toHomePath);
             }
         }
     }
-    // 4. 只要有小车走完一格，或者有小车在装卸货工作中，就推进全局系统时钟（逻辑步数）
+
+    // 4. 时钟步进脉冲控制
     if (anyRobotLogicStepped || anyRobotWorking) {
         systemTick++;
+    }
+}
+/**
+ * @brief 🌟【全局运筹优化核心】：基于匈牙利算法的上帝视角全局集中式调度
+ */
+void WarehouseManager::dispatchOrdersByHungarian() {
+    // 1. 每帧先让订单的等待时间滚动起来
+    orderSystem.updateOrderTicks();
+
+    // 2. 搜集快照：挑出场上所有真正“闲得发慌”的小车和“嗷嗷待哺”的订单
+    std::vector<Robot*> freeRobots;
+    for (auto& r : robots) {
+        if (r.status == RobotStatus::IDLE) { // 只有处于空闲、回巢待命状态的车才参与竞标
+            freeRobots.push_back(&r);
+        }
+    }
+
+    std::vector<Order*> waitingOrders;
+    // 获取当前 activeOrders 的肉体指针（可以遍历 getAllOrders 的底层引用，或者给 OrderSystem 增加一个返回非const活跃列表的接口）
+    // 这里假设通过类似 getWaitingOrdersList() 或者直接访问内部容器拿到所有等待单
+    for (auto& o : orderSystem.getNonConstActiveOrders()) {
+        if (o.status == OrderStatus::WAITING) {
+            waitingOrders.push_back(&o);
+        }
+    }
+
+    // 防御保护：如果场上没有空闲车，或者没有等待的订单，直接退出，不浪费 CPU 算力
+    if (freeRobots.empty() || waitingOrders.empty()) {
+        return;
+    }
+
+    // 3. 构建二维综合“代价矩阵” (行: 空闲小车, 列: 等待订单)
+    int nRows = (int)freeRobots.size();
+    int nCols = (int)waitingOrders.size();
+    std::vector<std::vector<int>> costMatrix(nRows, std::vector<int>(nCols, 0));
+
+    // 设定时间防饥饿项的权重因子
+    const int TIME_WEIGHT = 2;
+
+    for (int i = 0; i < nRows; ++i) {
+        for (int j = 0; j < nCols; ++j) {
+            // a. 拿到该订单对应的货架靠泊点（RCS 目的地）
+            int stationId = waitingOrders[j]->targetStationId;
+            Station targetStation = this->getStationById(stationId); // 假设你有通过 ID 获取 Station 的查表函数
+            Point dockPos = targetStation.dockPoint;
+
+            // b. 计算小车当前真实位置到货架靠泊点的曼哈顿距离
+            int curX = static_cast<int>(freeRobots[i]->realX + 0.5f);
+            int curY = static_cast<int>(freeRobots[i]->realY + 0.5f);
+            int manhattanDist = abs(curX - dockPos.x) + abs(curY - dockPos.y);
+
+            // c. 运用痛苦指数公式：综合代价 = 曼哈顿距离成本 - 饥饿惩罚项
+            int cost = manhattanDist * 10 - (waitingOrders[j]->waitTicks / TIME_WEIGHT);
+
+            // 匈牙利算法要求代价不能为负数，做个刚性底线防御
+            costMatrix[i][j] = (cost > 0) ? cost : 0;
+        }
+    }
+
+    // 4. 召唤匈牙利算法求解器，开启离散数学奇迹
+    HungarianOptimizer optimizer;
+    std::vector<int> assignment; // 存储第 i 辆车分到的订单索引
+    optimizer.solve(costMatrix, assignment);
+
+    // 5. 根据最优匹配结果，进行全局刚性批量下发
+    for (int i = 0; i < nRows; ++i) {
+        int assignedOrderIdx = assignment[i];
+
+        // 如果这辆车成功匹配到了一个真实的订单（非虚拟补齐节点）
+        if (assignedOrderIdx != -1 && assignedOrderIdx < nCols) {
+            Robot* robot = freeRobots[i];
+            Order* order = waitingOrders[assignedOrderIdx];
+
+            // a. 改变订单状态为执行中
+            order->status = OrderStatus::PROCESSING;
+
+            // b. 刚性绑定小车的业务上下文，注入灵魂
+            robot->status = RobotStatus::MOVING_TO_PICK; // 小车状态强切：全速前往货架取货
+            robot->currentOrderId = order->orderId;
+            robot->currentTargetStationId = order->targetStationId;
+
+            // c. 驱动底层 RCS 动力马达开始寻路导航
+            this->dispatchRobot(robot->id, order->targetStationId);
+        }
     }
 }
