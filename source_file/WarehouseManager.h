@@ -41,6 +41,7 @@ public:
 
     // 新增：暴露订单大脑的常量引用供 GUI 使用
     const OrderSystem& getOrderSystem() const { return orderSystem; }
+    OrderSystem& getOrderSystem() { return orderSystem; }   //非 const 版本（供鼠标点击、动态印单等需要修改数据的场景使用）
 
     // 全新的快速查询接口
     const std::map<int, Station>& getStations() const { return stations; }

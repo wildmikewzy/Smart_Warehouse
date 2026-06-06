@@ -105,3 +105,30 @@ void OrderSystem::completeOrder(int orderId) {
         }
     }
 }
+/**
+ * @brief 由手动鼠标点击触发，定向为特定货架生成一张新业务订单
+ */
+Order* OrderSystem::createNewOrder(int targetStationId, SKUType sku) {
+    Order order;
+    order.orderId = nextOrderId++;          // 唯一订单号自增
+    order.targetStationId = targetStationId; // 强行绑定鼠标点击的货架
+    order.sku = sku;                        // 赋予传入的物料类型
+    order.status = OrderStatus::WAITING;    // 初始标记为等待分配
+
+    // 压入活跃订单链表中
+    activeOrders.push_back(order);
+
+    // 顺着链表尾部，直接把刚刚生出来的订单在内存中的真实地址（指针）送出去返回
+    return &activeOrders.back();
+}
+/**
+ * @brief 依据订单 ID 查找并返回订单对象的肉体指针
+ */
+Order* OrderSystem::getOrderById(int orderId) {
+    for (auto& o : activeOrders) {
+        if (o.orderId == orderId) {
+            return &o; // 找到则返回订单肉体指针
+        }
+    }
+    return nullptr; // 防御保护，没找到安全返回空
+}

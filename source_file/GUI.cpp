@@ -19,11 +19,149 @@ GUI::GUI(int l, int w) : screenLength(l), screenWideth(w) {
 GUI::~GUI() {
 	closegraph();
 }
+/**
+* @brief 业务功能分区标定染色绘制，并刚性填满打印业务文字/序号
+*/
+void GUI::drawSystemZones(const WarehouseManager& manager) {
+	// =================================================================
+	// 🌟 核心准备：配置字号以尽量填满格点 (GRID_SIZE)
+	// =================================================================
+	// 假设 GRID_SIZE 是你的格子像素大小（如 30 或 40）
+	// 为了不让文字贴边显得太拥挤，字号设为 GRID_SIZE 的 85% 到 90% 最完美，这里直接用 GRID_SIZE - 4
+	int fontSize = GRID_SIZE - 4;
+	settextstyle(fontSize, 0, _T("微软雅黑"), 0, 0, FW_BOLD, false, false, false);
+	setbkmode(TRANSPARENT);
 
+	// --------- 1. 标定 4 辆小车的初始老家 (🏠 淡黄色) + 标注数字 1,2,3,4 ---------
+	setfillcolor(RGB(255, 255, 200)); // 淡黄色
+	setlinecolor(RGB(240, 240, 180));
+	settextcolor(RGB(180, 140, 30));  // 深金黄色文字，保证高对比度清晰度
+
+	for (int id = 1; id <= 4; ++id) {
+		int homeX = 0;
+		int homeY = 7 + id; // Y = 8, 9, 10, 11
+
+		int left = homeX * GRID_SIZE + 1;
+		int top = homeY * GRID_SIZE + 1;
+		int right = (homeX + 1) * GRID_SIZE - 1;
+		int bottom = (homeY + 1) * GRID_SIZE - 1;
+		fillrectangle(left, top, right, bottom);
+
+		// 格式化数字字符串
+		char idStr[4];
+		sprintf_s(idStr, "%d", id);
+
+		// 【居中核心算法】：根据当前字号动态计算文字的物理宽高，精准算射居中偏置
+		int textW = textwidth(_T(idStr));
+		int textH = textheight(_T(idStr));
+		int textX = left + (GRID_SIZE - textW) / 2;
+		int textY = top + (GRID_SIZE - textH) / 2;
+
+		outtextxy(textX, textY, _T(idStr));
+	}
+
+	// --------- 2. 标定新大门门禁排队直道 (🛑 浅红色) + 标注“排队通道” ---------
+	setfillcolor(RGB(255, 225, 225)); // 浅红色
+	setlinecolor(RGB(245, 200, 200));
+	settextcolor(RGB(220, 60, 60));   // 深红色汉字
+
+	// “排队通道”四个字，对应的 X 坐标刚好是 15, 16, 17, 18
+	const char* queueTexts[] = { "排", "队", "通", "道" };
+
+	for (int i = 0; i < 4; ++i) {
+		int px = 15 + i; // 15, 16, 17, 18
+		int py = 10;
+
+		int left = px * GRID_SIZE + 1;
+		int top = py * GRID_SIZE + 1;
+		int right = (px + 1) * GRID_SIZE - 1;
+		int bottom = (py + 1) * GRID_SIZE - 1;
+		fillrectangle(left, top, right, bottom);
+
+		// 居中打字
+		int textW = textwidth(_T(queueTexts[i]));
+		int textH = textheight(_T(queueTexts[i]));
+		int textX = left + (GRID_SIZE - textW) / 2;
+		int textY = top + (GRID_SIZE - textH) / 2;
+
+		outtextxy(textX, textY, _T(queueTexts[i]));
+	}
+
+	// --------- 3. 标定侧边返回专用离场道 (浅紫色) + 标注“返回通道” ---------
+	setfillcolor(RGB(238, 224, 252)); // 浅紫色
+	setlinecolor(RGB(220, 200, 240));
+	settextcolor(RGB(140, 70, 210));  // 深紫色汉字
+
+	// “返回通道”四个字，对应的 X 坐标也是 15, 16, 17, 18
+	// 注意：由于返回车流是从右往左开（18 -> 15），汉字顺序可以顺着由左到右自然排布
+	const char* returnTexts[] = { "返", "回", "通", "道" };
+
+	for (int i = 0; i < 4; ++i) {
+		int px = 15 + i; // 15, 16, 17, 18
+		int py = 9;
+
+		int left = px * GRID_SIZE + 1;
+		int top = py * GRID_SIZE + 1;
+		int right = (px + 1) * GRID_SIZE - 1;
+		int bottom = (py + 1) * GRID_SIZE - 1;
+		fillrectangle(left, top, right, bottom);
+
+		// 居中打字
+		int textW = textwidth(_T(returnTexts[i]));
+		int textH = textheight(_T(returnTexts[i]));
+		int textX = left + (GRID_SIZE - textW) / 2;
+		int textY = top + (GRID_SIZE - textH) / 2;
+
+		outtextxy(textX, textY, _T(returnTexts[i]));
+	}
+}
 void GUI::render(const WarehouseManager& manager) {
 	cleardevice();
 	drawGrid();
+	drawSystemZones(manager); // 绘制业务功能分区的底层色块
 	manager.getMap().draw();
+	// =================================================================
+	// 货架编号刚性满格居中叠加
+	// =================================================================
+	// 根据你的 Map.cpp，i 对应 MAP_LENGTH (X)，j 对应 MAP_WIDTH (Y)
+	int fontSize = GRID_SIZE - 6; // 字体略小于格子，饱满而不溢出
+	settextstyle(fontSize, 0, _T("微软雅黑"), 0, 0, FW_BOLD, false, false, false);
+	setbkmode(TRANSPARENT);
+	settextcolor(RGB(255, 255, 240)); // 象牙白文字，在灰色货架背景上对比度极高
+
+	for (int i = 0; i < MAP_LENGTH; ++i) {
+		for (int j = 0; j < MAP_WIDTH; ++j) {
+
+			// 只有当这一格是货架（类型为 1）时，才去查表打编号
+			if (manager.getMap().getType(i, j) == 1) {
+
+				// 刚性通过管理器查表获取该格子绑定的站点 ID
+				int rackId = manager.getStationIdByGrid(i, j);
+
+				if (rackId != -1) {
+					// 格式化编号
+					char idStr[10];
+					sprintf_s(idStr, "%d", rackId);
+
+					// 严格对齐 Map.cpp 的物理格子矩形坐标 (面层矩形 left+3, top+3)
+					int left = i * GRID_SIZE + 3;
+					int top = j * GRID_SIZE + 3;
+					int r_width = GRID_SIZE - 5;  // 计算面层矩形的实际宽度 (right-2 - (left+3))
+					int r_height = GRID_SIZE - 5; // 计算面层矩形的实际高度 (bottom-2 - (top+3))
+
+					// 高精居中偏置算法
+					int textW = textwidth(_T(idStr));
+					int textH = textheight(_T(idStr));
+					int textX = left + (r_width - textW) / 2;
+					int textY = top + (r_height - textH) / 2;
+
+					// 打印货架编号
+					outtextxy(textX, textY, _T(idStr));
+				}
+			}
+		}
+	}
+	// =================================================================
 	for (const auto& r : manager.getRobots()) {
 		// 【核心显示变色逻辑】：车上有货物的时候，AGV小车变为蓝色，其余时间段为红色，清晰区分载货状态
 		if (r.status == RobotStatus::LOADING || r.status == RobotStatus::MOVING_TO_DELIVER) {
@@ -106,8 +244,7 @@ void GUI::render(const WarehouseManager& manager) {
 	FlushBatchDraw(); // 将当前帧缓冲区画面一次性推送到屏幕，防止闪烁
 }
 /**
-* @brief 处理鼠标点击事件，支持选车、选货架/目标点以及派送指令的交互逻辑
-* 
+* @brief 处理鼠标点击事件，支持选车、选货架【现场动态下发WMS订单】以及普通格点调试派送
 */
 void GUI::handleMouseClick(WarehouseManager& manager) {
 	ExMessage msg;
@@ -132,14 +269,35 @@ void GUI::handleMouseClick(WarehouseManager& manager) {
 			my >= dispatchButtonRect.top && my <= dispatchButtonRect.bottom)
 		{
 			if (selectedRobotId != -1 && hasSelectedRack) {
-				// 【O(1) 极速查表】直接通过缓存获取站点ID，没有任何循环耗时
+				// 【O(1) 极速查表】通过货架物理格点获取对应的站点ID
 				int targetStationId = manager.getStationIdByGrid(selectedRackPos.x, selectedRackPos.y);
 
 				if (targetStationId != -1) {
-					manager.dispatchRobot(selectedRobotId, targetStationId);
-					char buf[100];
-					sprintf_s(buf, "成功指派机器人 %d 前往货架站点 %d", selectedRobotId, targetStationId);
-					addPopup(buf);
+					// 🚀 a. 现场印单：由于增补了非 const 重载，这一行将完美编译通过，毫无报错！
+					Order* newOrder = manager.getOrderSystem().createNewOrder(targetStationId, SKUType::A);
+
+					if (newOrder != nullptr) {
+						// 🚀 b. 强行改变订单状态为“执行中”
+						newOrder->status = OrderStatus::PROCESSING;
+
+						// 🚀 c. 顺藤摸瓜找到选中的那辆小车，改变状态机进行深度绑定
+						for (auto& r : const_cast<std::vector<Robot>&>(manager.getRobots())) {
+							if (r.id == selectedRobotId) {
+								r.status = RobotStatus::MOVING_TO_PICK; // 小车出发去货架取货
+								r.currentOrderId = newOrder->orderId;
+								r.currentTargetStationId = targetStationId;
+								break;
+							}
+						}
+
+						// 🚀 d. 驱动底层 RCS 动力马达：规划去货架取货的刚性路径
+						manager.dispatchRobot(selectedRobotId, targetStationId);
+
+						char buf[120];
+						sprintf_s(buf, "WMS动态落单：成功生成订单#%d，小车 %d 已全速前往货架 %d！",
+							newOrder->orderId, selectedRobotId, targetStationId);
+						addPopup(buf);
+					}
 				}
 				else {
 					addPopup("异常：该货架未绑定有效的靠泊站点！", 3.0f);
@@ -155,35 +313,7 @@ void GUI::handleMouseClick(WarehouseManager& manager) {
 			continue;
 		}
 
-		// 2. 点击了“普通格点派送”按钮
-		if (showGridDispatchButton && mx >= gridDispatchButtonRect.left && mx <= gridDispatchButtonRect.right &&
-			my >= gridDispatchButtonRect.top && my <= gridDispatchButtonRect.bottom)
-		{
-			if (selectedRobotId != -1 && hasSelectedTarget) {
-				// 【O(1) 无极查表】
-				int targetStationId = manager.getStationIdByGrid(selectedTargetPos.x, selectedTargetPos.y);
-
-				if (targetStationId != -1) {
-					manager.dispatchRobot(selectedRobotId, targetStationId);
-					char buf[100];
-					sprintf_s(buf, "机器人 %d 前往目标靠泊点站点 %d", selectedRobotId, targetStationId);
-					addPopup(buf);
-				}
-				else {
-					addPopup("点击位置未绑定拓扑网靠泊站点！", 3.0f);
-				}
-
-				hasSelectedTarget = false;
-				showGridDispatchButton = false;
-			}
-			clickHandled = true;
-		}
-
-		if (clickHandled) {
-			continue;
-		}
-
-		// 3. 点击地图网格区域
+		// 3. 点击地图网格区域 (保持原样)
 		int gridX = mx / GRID_SIZE;
 		int gridY = my / GRID_SIZE;
 
@@ -322,7 +452,6 @@ void GUI::drawStatusPanel(const WarehouseManager& manager, bool hasRack, Point r
 
 		for (size_t i = 0; i < orders.size() && i < max_display; ++i) {
 			const auto& o = orders[i];
-
 			std::string stateStr;
 			if (o.status == OrderStatus::WAITING) stateStr = "等待分配>";
 			else if (o.status == OrderStatus::PROCESSING) stateStr = "小车执行中>";
@@ -353,7 +482,7 @@ void GUI::drawStatusPanel(const WarehouseManager& manager, bool hasRack, Point r
 bool GUI::isTimeout() const {
 	auto now = std::chrono::steady_clock::now();
 	auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - startTime).count();
-	return elapsed >= 1800;
+	return elapsed >= 1800;		//限时30min
 }
 
 void GUI::updateBlink() {
@@ -363,7 +492,9 @@ void GUI::updateBlink() {
 		lastBlinkTime = now;
 	}
 }
-
+/**
+* @brief 绘制选中小车的闪烁环，增强视觉反馈，提示用户当前选中的机器人位置
+*/
 void GUI::drawSelectionRing(const Point& pos) {
 	if (!blinkVisible) return;
 	int cx = static_cast<int>(pos.x * GRID_SIZE + GRID_SIZE / 2);
@@ -374,7 +505,9 @@ void GUI::drawSelectionRing(const Point& pos) {
 	circle(cx, cy, radius);
 	setlinestyle(PS_SOLID, 1);
 }
-
+/**
+* @brief 绘制货架选中虚线环，蓝色，闪烁提示
+*/
 void GUI::drawRackSelectionRing(const Point& pos) {
 	if (!blinkVisible) return;
 	int cx = static_cast<int>(pos.x * GRID_SIZE + GRID_SIZE / 2);
@@ -385,7 +518,9 @@ void GUI::drawRackSelectionRing(const Point& pos) {
 	circle(cx, cy, radius);
 	setlinestyle(PS_SOLID, 1);
 }
-
+/**
+* @brief 绘制目标选中虚线环，绿色，闪烁提示
+*/
 void GUI::drawTargetSelectionRing(const Point& pos) {
 	if (!blinkVisible) return;
 	int cx = static_cast<int>(pos.x * GRID_SIZE + GRID_SIZE / 2);
@@ -396,7 +531,9 @@ void GUI::drawTargetSelectionRing(const Point& pos) {
 	circle(cx, cy, radius);
 	setlinestyle(PS_SOLID, 1);
 }
-
+/**
+* @brief 绘制右侧“货架业务派送”按钮，点击后会根据选中的货架位置现场生成订单并驱动小车前往取货
+*/
 void GUI::drawDispatchButton() {
 	// 右侧按钮位置
 	int panelX = MAP_LENGTH * GRID_SIZE + 20;
@@ -425,7 +562,9 @@ void GUI::drawDispatchButton() {
 	int textY = dispatchButtonRect.top + (btnHeight - textHeight) / 2;
 	outtextxy(textX, textY, _T(dispatchButtonText.c_str()));
 }
-
+/**
+* @brief 绘制普通格点派送按钮，点击后会根据选中的格点位置现场生成订单并驱动小车前往取货
+*/
 void GUI::drawGridDispatchButton() {
 	int panelX = MAP_LENGTH * GRID_SIZE + 20;
 	int btnWidth = 240;

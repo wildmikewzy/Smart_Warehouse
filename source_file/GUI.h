@@ -45,6 +45,7 @@ public:
     bool isTimeout() const;
     void addPopup(const std::string& text, float duration = 2.5f);
     void updatePopups(DWORD deltaTime);
+    void drawSystemZones(const WarehouseManager& manager);
 
 private:
     void drawGrid();

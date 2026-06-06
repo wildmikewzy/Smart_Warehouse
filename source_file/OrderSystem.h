@@ -21,12 +21,12 @@ private:
 
 public:
     OrderSystem();
-
     void generateRandomOrder(const std::vector<int>& validShelfStationIds);
     bool hasOrders() const;
     Order* getFirstWaitingOrder();     // 新增：返回第一个等待业务的引用
     void completeOrder(int orderId);   // 新增：根据 ID 精准核销订单
-
+	Order* getOrderById(int orderId); // 根据订单 ID 获取订单指针，供调度系统查询订单状态
+    Order* createNewOrder(int targetStationId,SKUType sku);    // 鼠标点击货架时，动态定向生成新订单，并返回该新订单的肉体指针
     // 获取当前所有订单快照以供 GUI 渲染
     std::vector<Order> getAllOrders() const {
         std::vector<Order> orders;
