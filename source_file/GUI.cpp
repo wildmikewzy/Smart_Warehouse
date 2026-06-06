@@ -274,7 +274,18 @@ void GUI::handleMouseClick(WarehouseManager& manager) {
 
 				if (targetStationId != -1) {
 					// 🚀 a. 现场印单：由于增补了非 const 重载，这一行将完美编译通过，毫无报错！
-					Order* newOrder = manager.getOrderSystem().createNewOrder(targetStationId, SKUType::A);
+					SKUType SKU;
+					int dist = abs(selectedRackPos.x - 19) + abs(selectedRackPos.y - 10);		//根据货架位置计算曼哈顿距离热度，动态分配 ABC 类 SKU
+					if (dist <= 12) {
+						SKU = SKUType::A;
+					}
+					else if (dist <= 20) {
+						SKU = SKUType::B;
+					}
+					else {
+						SKU = SKUType::C;
+					}
+					Order* newOrder = manager.getOrderSystem().createNewOrder(targetStationId, SKU);
 
 					if (newOrder != nullptr) {
 						// 🚀 b. 强行改变订单状态为“执行中”
