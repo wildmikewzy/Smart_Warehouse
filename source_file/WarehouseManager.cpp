@@ -270,9 +270,9 @@ int getNextAvailableQueueX_AtGate(const std::vector<Robot>& robots) {
  * @details 完美修复“先回巢再接单”硬伤，实现就近无缝运筹派单
  */
 void WarehouseManager::updateAll() {
-    // ==========================================
-    // 测试阶段：只生成 4 个初始订单 (保持原样)
-    // ==========================================
+    // ====================================================================
+	// 测试阶段：初始生成4个随机生成 4 个订单 ，并且按 T 键可以刷新随机订单
+    // ====================================================================
     static bool ordersGenerated = false;
     if (!ordersGenerated) {
         std::vector<int> validShelfIds;
@@ -294,7 +294,35 @@ void WarehouseManager::updateAll() {
         ordersGenerated = false;
     }
     lastTState = currentTState;
+    // ===========================================================
+    // 🌟【核心新增】：P 键触发 20 个绝对相同的并发压力测试订单流
+    // ===========================================================
+    static bool lastPState = false; // 记录上一帧 P 键是否被按下
+    bool currentPState = (GetAsyncKeyState('P') & 0x8000) != 0; // 当前帧 P 键状态
 
+    // 检测到 P 键单次敲击瞬间
+    if (currentPState && !lastPState) {
+        // 1. 强力清空当前订单系统，保证测试跑道绝对纯净
+        orderSystem.clearAllOrders();
+
+        // 2. 定义 20 个确定性的压力测试订单流 (Pair: <货架ID, SKU类型int>)
+        // 货架ID严格参照你的地图图片，覆盖灰、蓝、橙三大温区
+        std::vector<std::pair<int, int>> stressTestData = {
+            {3, 0},  {14, 1}, {17, 0}, {26, 2}, {41, 0},  // 前5单：偏左侧与中部
+            {53, 1}, {64, 0}, {75, 1}, {87, 2}, {9, 0},   // 中5单：向右侧橙色重度区延伸
+            {22, 0}, {32, 1}, {45, 0}, {48, 2}, {57, 1},  // 后5单：上下两侧深度穿插
+            {68, 0}, {80, 0}, {93, 1}, {6, 2},  {91, 0}   // 尾5单：极限边缘对角线单
+        };
+
+        // 3. 刚性批量灌入订单系统大盘
+        for (const auto& testOrder : stressTestData) {
+            orderSystem.injectCustomOrder(testOrder.first, testOrder.second);
+        }
+
+         //4. 重置系统总时钟（可选）：让两边的性能对比都从同一个时间起点起跑
+         systemTick = 0; 
+    }
+    lastPState = currentPState; // 更新按键历史状态
     // ==================================================
     // 【时空 A* 寻路限流阀】
     // ==================================================
@@ -410,12 +438,15 @@ void WarehouseManager::updateAll() {
 
         // ---------- 阶段二：送货路上与门禁靠泊递补排队 ----------
         else if (r.status == RobotStatus::MOVING_TO_DELIVER) {
+
+            // 🌟【第一步：触头检测】：只要肉体踩到 (18, 10) 且路径空了，立刻强转卸货状态 (保持原样)
             if (r.currentPos == Point(18, 10) && r.pathQueue.empty()) {
                 r.status = RobotStatus::UNLOADING;
                 r.workCooldown = 40;
                 continue;
             }
 
+            // 🌟【第二步：刚性逐格看前车递补】：针对卡在直道排队区（15~17, 10）且没有路径的后车 (保持原样)
             if (r.currentPos.y == 10 && r.currentPos.x >= 15 && r.currentPos.x <= 17 && r.pathQueue.empty()) {
                 int nextX = r.currentPos.x + 1;
                 bool nextCellOccupied = false;
@@ -444,6 +475,22 @@ void WarehouseManager::updateAll() {
                     r.setPath(stepForwardPath);
                     r.moveProgress = 0.0f;
                     r.cellStepCompleted = false;
+                }
+            }
+            // 🌟【新增第三步：中途拥堵丢路径兜底重寻路】：完美收容处于大地图中、因拥堵导致路径为空的小车
+            else if (r.pathQueue.empty()) {
+                // 严格遵守单帧时空 A* 寻路限流阀，绝对不挤爆 CPU 算力
+                if (!pathCalculatedThisFrame) {
+                    // 原地重新向大门 (15, 10) 发起时空避障寻路请求
+                    std::vector<Point> toGatePath = Router::getPath(r.currentPos, Point(15, 10), warehouseMap, globalTable, r.id, systemTick, false);
+
+                    if (!toGatePath.empty()) {
+                        r.setPath(toGatePath); // 寻路成功，重新注入移动灵魂！
+                    }
+
+                    // 🚨 绝杀细节：无论这次重寻路是成功还是由于拥堵再次失败，
+                    // 只要调用了高耗时的 Router::getPath()，本帧的寻路限流阀都必须强行锁死，保护帧率！
+                    pathCalculatedThisFrame = true;
                 }
             }
         }

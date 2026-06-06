@@ -39,4 +39,19 @@ public:
     }
     // 供 Manager 遍历修改订单状态用
     std::list<Order>& getNonConstActiveOrders() { return activeOrders; }
+    // 【测试用】：一键清空当前任务池（确保测试开始时大盘纯净）
+    void clearAllOrders() {
+        activeOrders.clear();
+    }
+
+    // 【测试用】：刚性注入一个确定属性的测试订单
+    void injectCustomOrder(int stationId, int skuTypeInt) {
+        Order order;
+        order.orderId = nextOrderId++;
+        order.targetStationId = stationId;
+        order.sku = static_cast<SKUType>(skuTypeInt); // 强转为你 common.h 中的 SKUType
+        order.status = OrderStatus::WAITING;
+        order.waitTicks = 0; // 初始痛苦指数为0
+        activeOrders.push_back(order);
+    }
 };

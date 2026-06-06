@@ -79,21 +79,38 @@ void Robot::update() {
         amIExempt = true; // 正在迈入老家出生点(X=0)的最后一步车，免检！
     }
 
+    // ==================================================
+// 🌟【完美修正版】：利用 pathQueue 动态检测对头冲突
+// ==================================================
+    bool headOnDeadlockDetected = false;
+    Robot* deadlockedPartner = nullptr;
+
     if (!amIExempt) {
         for (const auto& otherPtr : *allRobots) {
             if (otherPtr == nullptr) continue;
             if (otherPtr == this) continue;
 
-            // 🌟【前车状态免疫】：如果前车已经卸完货正在撤离（RETURNING_BUFFER），
-            // 就算它屁股还在 (18,10) 蹭着没拉开距离，后面准备递补的车也绝对不要被它挡住！
+            // 🌟【前车状态免疫】：如果是离场车，忽略它的视觉干扰
             if (otherPtr->status == RobotStatus::RETURNING_BUFFER) {
-                continue; // 忽略离场车的视觉干扰
+                continue;
             }
 
-            // 用 -> 访问前方小车的坐标和动画进度
+            // 1. 检查对方当前站立的格子，是不是我正准备要去的格子（nextPos 是你的局部变量）
             if (otherPtr->currentPos == nextPos) {
-                // 如果前车的转弯/直线动画还没完全拉开空间（屁股还没挪干净）
                 if (otherPtr->moveProgress < 1.0f) {
+
+                    // 🚨【核心修正】：动态获取对方小车的下一步目标点
+                    // 如果对方路径空了，目标就是它原地；如果没空，目标就是它路径的队首
+                    Point otherNextPos = otherPtr->pathQueue.empty() ? otherPtr->currentPos : otherPtr->pathQueue.front();
+
+                    // 🚨【对头死锁检测】：如果对方的目标格子，也恰好是我当前肉体站着的格子！
+                    if (otherNextPos == this->currentPos) {
+                        headOnDeadlockDetected = true;
+                        deadlockedPartner = otherPtr; // 记录下和谁撞了
+                        break; // 撕开循环，准备自愈
+                    }
+
+                    // 2. 如果只是普通的同向追踪（前车屁股还没挪干净），则正常维持视觉挂起
                     visualBlocked = true;
                     break;
                 }
@@ -101,8 +118,22 @@ void Robot::update() {
         }
     }
 
+    // 🌟【死锁主动自愈】：利用 ID 破除对称性，大 ID 小车无条件退让
+    if (headOnDeadlockDetected && deadlockedPartner != nullptr) {
+        if (this->id > deadlockedPartner->id) {
+            this->pathQueue.clear();          // 1. 瞬间轰碎自己后续的所有路径
+            this->moveProgress = 0.0f;        // 2. 动画进度瞬间归零！肉体在视觉上丝滑地退回 currentPos 的格子中心
+
+            // 如果你的代码里有类似 cellStepCompleted 的每格完成标记，可以把它设为 true
+            // 从而逼迫 WMS 在下一帧立刻为它重新调度
+            // this->cellStepCompleted = true; 
+
+            return;                           // 3. 闪退本帧，把宝贵的物理空间让给低 ID 的小车顺利通行
+        }
+    }
+
     if (visualBlocked) {
-        // 触发渲染暂停视觉保护：本帧不累加动画进度，在屏幕上微微一顿，等待前车走开
+        // 触发渲染暂停视觉保护：正常的同向追踪时，本帧不累加动画进度，在屏幕上微微一顿
         return;
     }
 
