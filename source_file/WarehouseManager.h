@@ -15,7 +15,7 @@ private:
     //vector<Robot> robots;               // 管理的机器人列表
     Map warehouseMap;                   // 仓库的地图数据
     ReservationTable globalTable;       // 全局时空预定表，用于规避多车抢点
-    int systemTick;                     // 全局系统时间戳（逻辑步数）
+    int systemTick;                     // 全局系统时间戳（逻辑步数)
 
     // 全新成员变量
     OrderSystem orderSystem;            // 引入订单大脑
@@ -72,4 +72,5 @@ public:
     void onOrderCreated(Order& order);
     void onOrderFinished(const Order& order);
     LogisticsMetrics calculateMetrics();
+    void moveRobotToGrid(int robotId, int targetX, int targetY);
 };

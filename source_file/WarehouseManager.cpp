@@ -564,24 +564,38 @@ void WarehouseManager::updateAll(GUI & gui) {
         systemTick++;
         this->globalSystemTick++;
     }
-    // 🌟【核心捕获】：检测 20 个压测订单是否全部功德圆满
+    // ====================================================================
+    // 🌟【核心修改】：检测 20 个压测订单完成，刚性输出控制台大盘对比看板
+    // ====================================================================
     if (this->isStressTesting && !this->hasReportedMetrics && this->totalCompletedOrders == 20) {
 
-        // 1. 立刻锁死旗帜，确保该 if 块在整个压测生命周期里【只进一次】
+        // 1. 立刻锁死旗帜，防止多帧重复触发
         this->hasReportedMetrics = true;
-        this->isStressTesting = false; // 压测宣告结束
+        this->isStressTesting = false;
 
-        // 2. 调用刚才写好的全盘指标解算函数
+        // 2. 调用全盘指标解算
         LogisticsMetrics res = this->calculateMetrics();
 
-        // 3. 格式化组装三行文本字符串
+        // 🌟【新增：硬核控制台大盘数据打印】
+        // 这一段会在全清盘的瞬间，直接在你的黑窗口（控制台）刷出一盘极其规整的账目
+        std::cout << "\n==================================================" << std::endl;
+        std::cout << "   [压力测试全盘清算报告 - "
+            <<  "匈牙利算法组" // 自动识别组别名（若GUI有标题区分）
+            << "]" << std::endl;
+        std::cout << "==================================================" << std::endl;
+        std::cout << " 核心时钟 [大盘清盘总耗时] : " << this->globalSystemTick << " Ticks" << std::endl;
+        std::cout << " 物流效率 [综合空驶率]     : " << res.emptyRunningRate << "%" << std::endl;
+        std::cout << " 延时监控 [平均结单耗时]   : " << res.avgOrderCompletionTime << " Ticks" << std::endl;
+        std::cout << " 吞吐效能 [系统单位吞吐]   : " << res.throughputPerKGrid << " 单/K-Ticks" << std::endl;
+        std::cout << "==================================================\n" << std::endl;
+
+        // 3. 格式化组装三行文本字符串（维持原有的 GUI 弹窗展示）
         char str1[128], str2[128], str3[128];
         sprintf_s(str1, "[压测报告] 综合空驶率: %.1f%%", res.emptyRunningRate);
         sprintf_s(str2, "[性能监控] 平均结单耗时: %.1f Ticks", res.avgOrderCompletionTime);
         sprintf_s(str3, "[吞吐效能] 系统当前吞吐: %.2f 单/K-Ticks", res.throughputPerKGrid);
 
-        // 4. 将它们刚性注入你的 GUI 弹窗队列（设置 15.0f 秒长效显示，方便截图调优）
-        // 注：根据你的架构，如果 GUI 是全局变量直接调用即可；若是成员变量请通过指针/引用调用
+        // 4. 刚性注入 GUI 弹窗队列
         gui.addPopup(str1, 15.0f);
         gui.addPopup(str2, 15.0f);
         gui.addPopup(str3, 15.0f);
@@ -713,4 +727,32 @@ WarehouseManager::LogisticsMetrics WarehouseManager::calculateMetrics() {
         << " | WMS当前时钟: " << globalSystemTick << std::endl;
 
     return metrics;
+}
+void WarehouseManager::moveRobotToGrid(int robotId, int targetX, int targetY) {
+    // 🌟 安全查找：根据真实的机器人 ID 抓取实体，而不是盲目相信下标
+    Robot* targetRobot = nullptr;
+    for (auto& r : this->robots) {
+        if (r.id == robotId) {
+            targetRobot = &r;
+            break;
+        }
+    }
+
+    // 防御性编程：防止传入了不存在的 ID 导致指针崩溃
+    if (targetRobot == nullptr) {
+        std::cout << "[ERROR] 强驱失败：未找到 ID 为 " << robotId << " 的机器人！" << std::endl;
+        return;
+    }
+
+    // 2. 清空原本残余路径
+    targetRobot->pathQueue.clear();
+
+    // 3. 安全取整计算当前起点
+    Point startPos(static_cast<int>(targetRobot->realX + 0.5f), static_cast<int>(targetRobot->realY + 0.5f));
+
+    // 4. 调用时空寻路算法（注意：这里的 robotId 传给 Router 内部做碰撞规避标识）
+    std::vector<Point> path = Router::getPath(startPos, Point(targetX, targetY), warehouseMap, globalTable, robotId, systemTick, false);
+
+    // 5. 正确注入目标小车
+    targetRobot->setPath(path);
 }

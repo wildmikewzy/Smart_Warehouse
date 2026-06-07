@@ -248,60 +248,40 @@ void GUI::render(const WarehouseManager& manager) {
 */
 void GUI::handleMouseClick(WarehouseManager& manager) {
 	ExMessage msg;
-	bool processedClick = false;
 
 	while (peekmessage(&msg, EX_MOUSE)) {
 		if (msg.message != WM_LBUTTONDOWN) {
 			continue;
 		}
 
-		if (processedClick) {
-			continue;
-		}
-		processedClick = true;
-
 		int mx = msg.x;
 		int my = msg.y;
-		bool clickHandled = false;
+		bool clickHandled = false; // 🌟 移到这里：确保每次拿到新的点击消息时彻底重置
 
 		// 1. 点击了“货架业务派送”按钮
 		if (showDispatchButton && mx >= dispatchButtonRect.left && mx <= dispatchButtonRect.right &&
 			my >= dispatchButtonRect.top && my <= dispatchButtonRect.bottom)
 		{
 			if (selectedRobotId != -1 && hasSelectedRack) {
-				// 【O(1) 极速查表】通过货架物理格点获取对应的站点ID
 				int targetStationId = manager.getStationIdByGrid(selectedRackPos.x, selectedRackPos.y);
-
 				if (targetStationId != -1) {
-					// 🚀 a. 现场印单：由于增补了非 const 重载，这一行将完美编译通过，毫无报错！
 					SKUType SKU;
-					int dist = abs(selectedRackPos.x - 19) + abs(selectedRackPos.y - 10);		//根据货架位置计算曼哈顿距离热度，动态分配 ABC 类 SKU
-					if (dist <= 12) {
-						SKU = SKUType::A;
-					}
-					else if (dist <= 20) {
-						SKU = SKUType::B;
-					}
-					else {
-						SKU = SKUType::C;
-					}
+					int dist = abs(selectedRackPos.x - 19) + abs(selectedRackPos.y - 10);
+					if (dist <= 12) SKU = SKUType::A;
+					else if (dist <= 20) SKU = SKUType::B;
+					else SKU = SKUType::C;
+
 					Order* newOrder = manager.getOrderSystem().createNewOrder(targetStationId, SKU);
-
 					if (newOrder != nullptr) {
-						// 🚀 b. 强行改变订单状态为“执行中”
 						newOrder->status = OrderStatus::PROCESSING;
-
-						// 🚀 c. 顺藤摸瓜找到选中的那辆小车，改变状态机进行深度绑定
 						for (auto& r : const_cast<std::vector<Robot>&>(manager.getRobots())) {
 							if (r.id == selectedRobotId) {
-								r.status = RobotStatus::MOVING_TO_PICK; // 小车出发去货架取货
+								r.status = RobotStatus::MOVING_TO_PICK;
 								r.currentOrderId = newOrder->orderId;
 								r.currentTargetStationId = targetStationId;
 								break;
 							}
 						}
-
-						// 🚀 d. 驱动底层 RCS 动力马达：规划去货架取货的刚性路径
 						manager.dispatchRobot(selectedRobotId, targetStationId);
 
 						char buf[120];
@@ -313,7 +293,6 @@ void GUI::handleMouseClick(WarehouseManager& manager) {
 				else {
 					addPopup("异常：该货架未绑定有效的靠泊站点！", 3.0f);
 				}
-
 				hasSelectedRack = false;
 				showDispatchButton = false;
 			}
@@ -321,16 +300,47 @@ void GUI::handleMouseClick(WarehouseManager& manager) {
 		}
 
 		if (clickHandled) {
-			continue;
+			continue; // 🌟 成功拦截按钮点击，直接跳过后面的地图判定
 		}
 
-		// 3. 点击地图网格区域 (保持原样)
+		// ====================================================================
+		// 🌟 2. 点击了“普通格点派送”按钮（绿色按钮）
+		// ====================================================================
+		if (showGridDispatchButton && mx >= gridDispatchButtonRect.left && mx <= gridDispatchButtonRect.right &&
+			my >= gridDispatchButtonRect.top && my <= gridDispatchButtonRect.bottom)
+		{
+			if (selectedRobotId != -1 && hasSelectedTarget) {
+				for (auto& r : const_cast<std::vector<Robot>&>(manager.getRobots())) {
+					if (r.id == selectedRobotId) {
+						r.currentOrderId = -1;
+						r.status = RobotStatus::MANUAL_OVERRIDE;
+						r.currentTargetStationId = -1;
+
+						// 调用后端的强驱接口
+						manager.moveRobotToGrid(selectedRobotId, selectedTargetPos.x, selectedTargetPos.y);
+
+						char buf[80];
+						sprintf_s(buf, "[强驱脱困] 已向小车 %d 下发刚性位移指令 -> (%d, %d)",
+							selectedRobotId, selectedTargetPos.x, selectedTargetPos.y);
+						addPopup(buf);
+						break;
+					}
+				}
+				hasSelectedTarget = false;
+				showGridDispatchButton = false;
+			}
+			clickHandled = true;
+		}
+
+		if (clickHandled) {
+			continue; // 🌟 成功拦截绿色按钮点击，直接跳过后面的地图判定
+		}
+
+		// 3. 点击地图网格区域
 		int gridX = mx / GRID_SIZE;
 		int gridY = my / GRID_SIZE;
 
 		if (gridX >= 0 && gridX < MAP_LENGTH && gridY >= 0 && gridY < MAP_WIDTH) {
-
-			// A. 检测是否点中了机器人
 			bool clickedRobot = false;
 			for (const auto& r : manager.getRobots()) {
 				if (static_cast<int>(r.realX + 0.5f) == gridX && static_cast<int>(r.realY + 0.5f) == gridY) {
@@ -349,15 +359,12 @@ void GUI::handleMouseClick(WarehouseManager& manager) {
 				}
 			}
 
-			// B. 如果已经选了车，点的是普通网格
 			if (!clickedRobot && selectedRobotId != -1) {
 				const Map& warehouseMap = manager.getMap();
-
 				if (!warehouseMap.isWalkable(gridX, gridY)) {
 					selectedRackPos = { gridX, gridY };
 					hasSelectedRack = true;
 					showDispatchButton = true;
-
 					hasSelectedTarget = false;
 					showGridDispatchButton = false;
 				}
@@ -365,7 +372,6 @@ void GUI::handleMouseClick(WarehouseManager& manager) {
 					selectedTargetPos = { gridX, gridY };
 					hasSelectedTarget = true;
 					showGridDispatchButton = true;
-
 					hasSelectedRack = false;
 					showDispatchButton = false;
 				}

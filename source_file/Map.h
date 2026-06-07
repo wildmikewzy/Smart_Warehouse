@@ -1,9 +1,9 @@
-#pragma once
+ï»¿#pragma once
 #include "common.h"
 
 class Map {
 private:
-    int data[MAP_LENGTH][MAP_WIDTH]; // 0:¿ÕµØ, 1:»õ¼Ü, 2:³ö»õµã
+    int data[MAP_LENGTH][MAP_WIDTH]; // 0:ç©ºåœ°, 1:è´§æž¶, 2:å‡ºè´§ç‚¹
 
 public:
     Map();

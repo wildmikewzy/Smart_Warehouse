@@ -20,6 +20,7 @@ enum class RobotStatus {
     MOVING_TO_DELIVER,  // 装货完毕，正携货前往出货口
     UNLOADING,          // 到达出货口，正在卸货锁定中
     RETURNING_BUFFER,       //出货完毕，前往返回缓冲区
+    MANUAL_OVERRIDE, //人工强驱脱困模式
     ERROR_      //机器人错误状态
 };
 
