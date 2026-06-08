@@ -17,7 +17,7 @@ OrderSystem::OrderSystem()
  * @details
  * 1. 首先对输入的货架站点列表进行安全性空检查，若无合法货架则直接拦截返回。\n
  * 2. 利用均匀分布随机抽取一个货架，并结合当前活跃队列进行动态去重，确保同货架不并发。\n
- * 3. 利用离散权重分布（按 60% A类、30% B类、10% C类的高级仓储热度规律）为订单赋予物料 SKU 属性。\n
+ * 3. 根据货单所在的位置严格绑定货物类型。\n
  * 4. 自动递增生成唯一的订单 ID，将订单初始状态标记为 WAITING（等待分配），最后压入活跃订单队列。
  */
 void OrderSystem::generateRandomOrder(const std::vector<int>& validShelfStationIds) {
@@ -26,7 +26,6 @@ void OrderSystem::generateRandomOrder(const std::vector<int>& validShelfStationI
     }
 
     std::uniform_int_distribution<size_t> stationDist(0, validShelfStationIds.size() - 1);      // 均匀分布随机选择一个货架站点
-    std::discrete_distribution<int> skuDist({ 60, 30, 10 });        // 离散分布随机选择 SKU 类型，权重分别为 60% A类、30% B类、10% C类
 
     int chosenStationId = -1;
     bool isDuplicate = true;
@@ -59,9 +58,26 @@ void OrderSystem::generateRandomOrder(const std::vector<int>& validShelfStationI
     Order order;
     order.orderId = nextOrderId++;
     order.targetStationId = chosenStationId;
-    order.sku = static_cast<SKUType>(skuDist(rng));
-    order.status = OrderStatus::WAITING;
 
+    // ====================================================================
+    // 🌟【核心修复】：根据货架实际位置与颜色，严格解耦并强绑定货物类型
+    // ====================================================================
+    if ((chosenStationId >= 52 && chosenStationId <= 60) || (chosenStationId >= 63 && chosenStationId <= 96)) {
+        // 1. 橙色货架 -> 严格对应 A 类货物 (对应原本的离散索引 0)
+        order.sku = static_cast<SKUType>(0);
+    }
+    else if ((chosenStationId >= 1 && chosenStationId <= 6) ||
+        (chosenStationId >= 13 && chosenStationId <= 16) ||
+        (chosenStationId >= 25 && chosenStationId <= 30)) {
+        // 2. 灰色货架 -> 严格对应 C 类货物 (对应原本的离散索引 2)
+        order.sku = static_cast<SKUType>(2);
+    }
+    else {
+        // 3. 蓝色货架 -> 严格对应 B 类货物 (对应原本的离散索引 1)
+        order.sku = static_cast<SKUType>(1);
+    }
+
+    order.status = OrderStatus::WAITING;
     activeOrders.push_back(order);
 }
 
