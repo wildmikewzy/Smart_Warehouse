@@ -16,7 +16,7 @@ Robot::Robot(int _id, Point start)
     // 初始化视觉坐标，让其和出生点重合
     realX = static_cast<float>(start.x);
     realY = static_cast<float>(start.y);
-    // 记录初始待命点为 homePos
+    // 记录初始待命点为
     homePos = start;
 
     // 初始化上一个位置
@@ -79,9 +79,9 @@ void Robot::update() {
         amIExempt = true; // 正在迈入老家出生点(X=0)的最后一步车，免检！
     }
 
-    // ==================================================
-// 🌟【完美修正版】：利用 pathQueue 动态检测对头冲突
-// ==================================================
+    // ====================================================================
+// 🌟【完美终结版】：破除帧内时序错位 + 彻底消除穿模硬核优化
+// ====================================================================
     bool headOnDeadlockDetected = false;
     Robot* deadlockedPartner = nullptr;
 
@@ -90,27 +90,23 @@ void Robot::update() {
             if (otherPtr == nullptr) continue;
             if (otherPtr == this) continue;
 
-            // 🌟【前车状态免疫】：如果是离场车，忽略它的视觉干扰
-            if (otherPtr->status == RobotStatus::RETURNING_BUFFER) {
-                continue;
-            }
-
-            // 1. 检查对方当前站立的格子，是不是我正准备要去的格子（nextPos 是你的局部变量）
+            // 1. 检查对方当前站立的格子，是不是我正准备要去的格子
             if (otherPtr->currentPos == nextPos) {
                 if (otherPtr->moveProgress < 1.0f) {
 
-                    // 🚨【核心修正】：动态获取对方小车的下一步目标点
-                    // 如果对方路径空了，目标就是它原地；如果没空，目标就是它路径的队首
+                    // 动态获取对方小车的下一步目标点
                     Point otherNextPos = otherPtr->pathQueue.empty() ? otherPtr->currentPos : otherPtr->pathQueue.front();
 
-                    // 🚨【对头死锁检测】：如果对方的目标格子，也恰好是我当前肉体站着的格子！
-                    if (otherNextPos == this->currentPos) {
+                    // 🚨【核心修正点】：对头死锁探测（完美兼容高ID车已提前清空路径的异步场景）
+                    // 情况 A：对方的目标格子是我当前格子（正面对撞）
+                    // 情况 B：对方路径已空（说明它是高ID车，已经在同一帧内抢先执行了退让，把路径轰碎了）
+                    if (otherNextPos == this->currentPos || otherPtr->pathQueue.empty()) {
                         headOnDeadlockDetected = true;
-                        deadlockedPartner = otherPtr; // 记录下和谁撞了
-                        break; // 撕开循环，准备自愈
+                        deadlockedPartner = otherPtr;
+                        break; // 撕开循环，由下方统一处理 ID 破除对称性
                     }
 
-                    // 2. 如果只是普通的同向追踪（前车屁股还没挪干净），则正常维持视觉挂起
+                    // 2. 如果只是普通的同向追踪（前车屁股还没挪干净），正常维持视觉挂起
                     visualBlocked = true;
                     break;
                 }
@@ -118,23 +114,29 @@ void Robot::update() {
         }
     }
 
-    // 🌟【死锁主动自愈】：利用 ID 破除对称性，大 ID 小车无条件退让
+    // 🌟【死锁自愈核心】：利用 ID 破除两车对称硬锁
     if (headOnDeadlockDetected && deadlockedPartner != nullptr) {
         if (this->id > deadlockedPartner->id) {
-            this->pathQueue.clear();          // 1. 瞬间轰碎自己后续的所有路径
-            this->moveProgress = 0.0f;        // 2. 动画进度瞬间归零！肉体在视觉上丝滑地退回 currentPos 的格子中心
+            // 逼大让小：我是高 ID 车，我无条件退让
+            this->pathQueue.clear();          // 1. 轰碎自己后续的所有路径
+            this->moveProgress = 0.0f;        // 2. 动画进度归零，退回己方格子中心
+            this->realX = static_cast<float>(currentPos.x);
+            this->realY = static_cast<float>(currentPos.y);
 
-            // 如果你的代码里有类似 cellStepCompleted 的每格完成标记，可以把它设为 true
-            // 从而逼迫 WMS 在下一帧立刻为它重新调度
-            // this->cellStepCompleted = true; 
-
-            return;                           // 3. 闪退本帧，把宝贵的物理空间让给低 ID 的小车顺利通行
+            // 3. 强行抛出格点完成信号，逼迫上游 WMS 在下一帧为我【重新寻路绕道】
+            this->cellStepCompleted = true;
+            return;                           // 闪退本帧，腾出物理和逻辑空间
         }
-    }
-
-    if (visualBlocked) {
-        // 触发渲染暂停视觉保护：正常的同向追踪时，本帧不累加动画进度，在屏幕上微微一顿
-        return;
+        else {
+            // 🛠️【终极修复】：我是低 ID 车
+            // 此时高 ID 车已经执行退让并闪回了它的格子中心（moveProgress=0）。
+            // 如果我死死钉在原地（比如原来的 moveProgress=0.8），在画面上就会显得我直接“插”进了对方身体里。
+            // 解决方案：低 ID 车在这一帧也必须把动画进度无条件归零，优雅地退回自己的格子中心！保持两车安全的视觉间距！
+            this->moveProgress = 0.0f;
+            this->realX = static_cast<float>(currentPos.x);
+            this->realY = static_cast<float>(currentPos.y);
+            visualBlocked = true;
+        }
     }
 
     if (moveCooldown > 0) {

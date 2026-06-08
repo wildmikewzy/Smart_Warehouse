@@ -274,9 +274,9 @@ int getNextAvailableQueueX_AtGate(const std::vector<Robot>& robots) {
  */
 void WarehouseManager::updateAll(GUI & gui) {
     // ====================================================================
-	// 测试阶段：初始生成4个随机生成 4 个订单 ，并且按 T 键可以刷新随机订单
+	// 测试：按 T 键可以刷新4个随机订单
     // ====================================================================
-    static bool ordersGenerated = false;
+    static bool ordersGenerated = true;
     if (!ordersGenerated) {
         std::vector<int> validShelfIds;
         for (const auto& pair : stations) {
@@ -298,7 +298,7 @@ void WarehouseManager::updateAll(GUI & gui) {
     }
     lastTState = currentTState;
     // ===========================================================
-    // 🌟【核心新增】：P 键触发 20 个绝对相同的并发压力测试订单流
+    // 压力测试：P 键触发 20 个绝对相同的并发压力测试订单流
     // ===========================================================
     static bool lastPState = false; // 记录上一帧 P 键是否被按下
     bool currentPState = (GetAsyncKeyState('P') & 0x8000) != 0; // 当前帧 P 键状态
@@ -338,8 +338,45 @@ void WarehouseManager::updateAll(GUI & gui) {
          this->hasReportedMetrics = false;
     }
     lastPState = currentPState; // 更新按键历史状态
+    // ====================================================================
+    // 🌟【时钟触发器】：受 GUI 开关控制的工业级 WMS 自动接单流水线（完美响应版）
+    // ====================================================================
+    static int lastOrderGenerateTick = 0;
+    static bool lastWmsState = false;
+
+    bool currentWmsState = gui.Get_isWmsAutoReceiving();
+
+    // 🌟 核心修复：捕捉鼠标点击开启的【上升沿】
+    if (currentWmsState && !lastWmsState) {
+        // 【妙招】把上次生成时间强行往前推 120 Ticks！
+        // 这样在下面做减法时，时差刚好是 120，开启的一瞬间就能【立刻】砸下第一单，杜绝点击假死感！
+        lastOrderGenerateTick = globalSystemTick - 120;
+    }
+    lastWmsState = currentWmsState;
+
+    // 进入核心接单流水线
+    if (currentWmsState) {
+        std::vector<int> validShelfIds;
+        for (const auto& pair : stations) {
+            if (pair.first != 999) validShelfIds.push_back(pair.first);
+        }
+
+        // 判定 CD 是否冷却完毕
+        if (globalSystemTick - lastOrderGenerateTick >= 60) {
+            if (!validShelfIds.empty()) {
+                // 随机生成订单，模拟电商前台订单
+                orderSystem.generateRandomOrder(validShelfIds);
+
+                // 刚性步进 CD
+                lastOrderGenerateTick = globalSystemTick;
+
+                // 🌟 建议加个控制台打印或者 Popup 提示，方便你肉眼断点调试
+                std::cout << "[WMS流水线] 成功接收一笔上游电商订单！当前系统时间: " << globalSystemTick << std::endl;
+            }
+        }
+    }
     // ==================================================
-    // 【时空 A* 寻路限流阀】
+    // 时空 A* 寻路限流阀
     // ==================================================
     bool pathCalculatedThisFrame = false;
 
@@ -347,7 +384,7 @@ void WarehouseManager::updateAll(GUI & gui) {
     orderSystem.updateOrderTicks();
 
     // ==================================================
-    // 🌟【运筹调度层】：基于匈牙利算法的全局集中匹配
+    // 基于匈牙利算法的全局集中匹配
     // ==================================================
     if (!pathCalculatedThisFrame) {
 
@@ -755,4 +792,5 @@ void WarehouseManager::moveRobotToGrid(int robotId, int targetX, int targetY) {
 
     // 5. 正确注入目标小车
     targetRobot->setPath(path);
+	targetRobot->status = RobotStatus::IDLE; // 强制切换状态，接收电商订单调度
 }

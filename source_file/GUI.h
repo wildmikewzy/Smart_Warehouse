@@ -26,15 +26,18 @@ private:
     ULONGLONG lastBlinkTime;
     bool blinkVisible = true;
 
-    // 新增：派送按钮相关
+    // 派送按钮相关
     bool showDispatchButton = false;
     RECT dispatchButtonRect;
     std::string dispatchButtonText;
 
-    // 新增：格点派送按钮相关
+    // 格点派送按钮相关
     bool showGridDispatchButton = false;
     RECT gridDispatchButtonRect;
     std::string gridDispatchButtonText;
+	//电商前台自动接单开关相关
+    bool isWmsAutoReceiving = false;        // 电商前台自动接单开关，默认关闭
+    RECT wmsToggleButtonRect;               // 开关按钮的物理点击区域
 
 public:
     GUI(int l, int w);
@@ -46,6 +49,9 @@ public:
     void addPopup(const std::string& text, float duration = 2.5f);
     void updatePopups(DWORD deltaTime);
     void drawSystemZones(const WarehouseManager& manager);
+    bool Get_isWmsAutoReceiving() const {
+		return isWmsAutoReceiving;
+    }
 
 private:
     void drawGrid();
@@ -57,4 +63,5 @@ private:
     void drawTargetSelectionRing(const Point& pos);
     void drawDispatchButton();   // 新增：绘制派送按钮
     void drawGridDispatchButton();
+    void drawWmsToggleButton();
 };

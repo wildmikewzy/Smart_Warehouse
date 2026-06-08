@@ -256,7 +256,7 @@ void GUI::handleMouseClick(WarehouseManager& manager) {
 
 		int mx = msg.x;
 		int my = msg.y;
-		bool clickHandled = false; // 🌟 移到这里：确保每次拿到新的点击消息时彻底重置
+		bool clickHandled = false; // 确保每次拿到新的点击消息时彻底重置
 
 		// 1. 点击了“货架业务派送”按钮
 		if (showDispatchButton && mx >= dispatchButtonRect.left && mx <= dispatchButtonRect.right &&
@@ -300,11 +300,11 @@ void GUI::handleMouseClick(WarehouseManager& manager) {
 		}
 
 		if (clickHandled) {
-			continue; // 🌟 成功拦截按钮点击，直接跳过后面的地图判定
+			continue; //  成功拦截按钮点击，直接跳过后面的地图判定
 		}
 
 		// ====================================================================
-		// 🌟 2. 点击了“普通格点派送”按钮（绿色按钮）
+		// 2. 点击了“普通格点派送”按钮（绿色按钮）
 		// ====================================================================
 		if (showGridDispatchButton && mx >= gridDispatchButtonRect.left && mx <= gridDispatchButtonRect.right &&
 			my >= gridDispatchButtonRect.top && my <= gridDispatchButtonRect.bottom)
@@ -331,9 +331,33 @@ void GUI::handleMouseClick(WarehouseManager& manager) {
 			}
 			clickHandled = true;
 		}
+		// ====================================================================
+		// 【新增工业流控制】：点击“电商前台自动接单”开关按钮
+		// ====================================================================
+		if (mx >= wmsToggleButtonRect.left && mx <= wmsToggleButtonRect.right &&
+			my >= wmsToggleButtonRect.top && my <= wmsToggleButtonRect.bottom)
+		{
+			// 状态一键取反
+			isWmsAutoReceiving = !isWmsAutoReceiving;
+
+			char buf[80];
+			if (isWmsAutoReceiving) {
+				sprintf_s(buf, "[WMS系统] 电商前台接单已【开启】！上游订单流开始注入...");
+				addPopup(buf, 3.0f);
+			}
+			else {
+				sprintf_s(buf, "[WMS系统] 电商前台接单已【截断】！暂停接收新订单。");
+				addPopup(buf, 3.0f);
+			}
+
+			clickHandled = true;
+		}
 
 		if (clickHandled) {
-			continue; // 🌟 成功拦截绿色按钮点击，直接跳过后面的地图判定
+			continue; // 成功拦截按钮点击，不穿透到地图网格
+		}
+		if (clickHandled) {
+			continue; // 成功拦截绿色按钮点击，直接跳过后面的地图判定
 		}
 
 		// 3. 点击地图网格区域
@@ -494,6 +518,7 @@ void GUI::drawStatusPanel(const WarehouseManager& manager, bool hasRack, Point r
 			outtextxy(panelX, yOffset, _T("... 更多订单折叠中"));
 		}
 	}
+	drawWmsToggleButton();		// 绘制电商前台自动接单开关按钮
 }
 
 bool GUI::isTimeout() const {
@@ -651,4 +676,47 @@ void GUI::drawPopups() {
 
 		baseY += textHeight + 10;
 	}
+}
+/**
+* @brief 绘制电商前台自动接单开关按钮，支持一键切换接单状态，并通过颜色和文本动态反馈当前状态
+*/
+void GUI::drawWmsToggleButton() {
+	int panelX = MAP_LENGTH * GRID_SIZE + 20; // 侧边栏起始X坐标
+	int btnWidth = 240;
+	int btnHeight = 40;
+	int btnY = 300; // 调整Y坐标，使其在你的界面右侧布局中垂直对齐
+
+	wmsToggleButtonRect.left = panelX;
+	wmsToggleButtonRect.top = btnY;
+	wmsToggleButtonRect.right = panelX + btnWidth;
+	wmsToggleButtonRect.bottom = btnY + btnHeight;
+
+	// 根据当前开关状态，动态变换按钮配色
+	if (isWmsAutoReceiving) {
+		setfillcolor(RGB(46, 204, 113));  // 科技绿：代表正在自动接单
+		setlinecolor(RGB(39, 174, 96));
+	}
+	else {
+		setfillcolor(RGB(231, 76, 60));   // 警示红：代表接单已关闭
+		setlinecolor(RGB(192, 57, 43));
+	}
+
+	// 绘制带有边框的按钮矩形
+	fillrectangle(wmsToggleButtonRect.left, wmsToggleButtonRect.top,
+		wmsToggleButtonRect.right, wmsToggleButtonRect.bottom);
+
+	// 设置文字样式
+	settextcolor(WHITE);
+	settextstyle(18, 0, _T("微软雅黑"));
+	setbkmode(TRANSPARENT);
+
+	// 动态切换按钮上的文本
+	std::string btnText = isWmsAutoReceiving ? "电商前台接单：运行中 (点击关闭)" : "电商前台接单：已暂停 (点击开启)";
+
+	int textWidth = textwidth(_T(btnText.c_str()));
+	int textHeight = textheight(_T(btnText.c_str()));
+	int textX = wmsToggleButtonRect.left + (btnWidth - textWidth) / 2;
+	int textY = wmsToggleButtonRect.top + (btnHeight - textHeight) / 2;
+
+	outtextxy(textX, textY, _T(btnText.c_str()));
 }

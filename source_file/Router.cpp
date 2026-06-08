@@ -36,21 +36,26 @@ static string getEdgeKey(int x1, int y1, int x2, int y2, int t) {
     return to_string(x1) + "," + to_string(y1) + "->" + to_string(x2) + "," + to_string(y2) + "@" + to_string(t);
 }
 
-// 时空安全检查：验证在 t 时刻移动到 (px, py) 是否会发生冲突
-static bool isTimeSpaceSafe(int currX, int currY, int px, int py, int t, int robotId, const ReservationTable& table) {
-    // 1. 点冲突检查（时间膨胀：t-1, t, t+1）
-    for (int dt = -1; dt <= 1; ++dt) {
-        int checkT = t + dt;
-        if (checkT < 0) continue;
-        TimePoint targetCheck = { px, py, checkT };
-        auto it = table.vertexReservations.find(targetCheck);
-        if (it != table.vertexReservations.end() && it->second != robotId) {
-            return false;
-        }
+static bool isTimeSpaceSafe(int currX, int currY, int currT, int px, int py, int nextT, int robotId, const ReservationTable& table) {
+    // 1. 精准点冲突检查
+    // 允许尾随：只需确保在下个时刻 nextT，目标格点没有被别人占领
+    // （如果需要防滑或留安全容余，可以保留 dt = 1 的前方预测，但绝不能查 dt = -1 的过去时占领）
+    TimePoint targetCheck = { px, py, nextT };
+    auto it = table.vertexReservations.find(targetCheck);
+    if (it != table.vertexReservations.end() && it->second != robotId) {
+        return false;
+    }
+
+    // 如果想要更安全，可以查一下对方会不会在 nextT + 1 撞进这个点
+    TimePoint futureCheck = { px, py, nextT + 1 };
+    auto itFuture = table.vertexReservations.find(futureCheck);
+    if (itFuture != table.vertexReservations.end() && itFuture->second != robotId) {
+        return false;
     }
 
     // 2. 边冲突检查（Edge Swap Collision）
-    string swapEdgeKey = getEdgeKey(px, py, currX, currY, t);
+    // 核心对齐：检查有没有人【同时】在 currT 时刻从目标点 (px, py) 往当前点 (currX, currY) 开
+    string swapEdgeKey = getEdgeKey(px, py, currX, currY, currT); // 🌟 注意：这里必须用 currT！
     if (table.edgeReservations.count(swapEdgeKey) > 0) {
         return false;
     }
@@ -156,13 +161,8 @@ vector<Point> Router::getPath(Point start, Point end, const Map& map,
                 }
             }
             // =================================================================
-            std::string reverseEdgeKey = to_string(px) + "," + to_string(py) + "->" +
-                to_string(current.pt.x) + "," + to_string(current.pt.y) + "@" + to_string(nextT);
-            if (table.edgeReservations.count(reverseEdgeKey) > 0) {
-                continue;
-            }
 
-            if (!isTimeSpaceSafe(current.pt.x, current.pt.y, px, py, nextT, robotId, table)) {
+            if (!isTimeSpaceSafe(current.pt.x, current.pt.y,current.t, px, py, nextT, robotId, table)) {        //检查时空安全性
                 continue; 
             }
 
@@ -214,6 +214,10 @@ vector<Point> Router::getPath(Point start, Point end, const Map& map,
             path.pop_back();
         }
     }
-
+    cout << "小车路径打印：";
+    for (auto& m : path) {
+		cout << "(" << m.x << "," << m.y << ") ";
+    }
+    cout << endl;
     return path;
 }
