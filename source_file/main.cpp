@@ -24,22 +24,22 @@ int main() {
 		DWORD deltaTime = currentTime - lastFrameTime;
 		lastFrameTime = currentTime;
 
-		// 【第一步】：捕获交互
+		// 1：捕获交互
 		gui.handleMouseClick(manager);
 
-		// 【第二步】：业务推进（定时心跳更新）
+		// 2：业务推进（定时心跳更新）
 		if (currentTime - lastLogicTime >= LOGIC_INTERVAL_MS) {
 			manager.updateAll(gui);
 			lastLogicTime = currentTime;
 		}
 
-		// 【第三步】：弹窗更新（UI动效层实时跟进）
+		// 3：弹窗更新（UI动效层实时跟进）
 		gui.updatePopups(deltaTime);
 
-		// 【第四步】：图形渲染（以极高帧率疯狂渲染，绝不由于 Sleep 导致颜色变换发生卡顿）
+		// 4：图形渲染（以极高帧率疯狂渲染，绝不由于 Sleep 导致颜色变换发生卡顿）
 		gui.render(manager);
 
-		// 【第五步】
+		// 5：帧率控制（通过 Sleep 控制逻辑层更新频率，避免 CPU 占用过高）
 		Sleep(30);
 	}
 	if ((GetAsyncKeyState(VK_ESCAPE) & 0x8000)) {
