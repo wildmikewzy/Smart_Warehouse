@@ -461,7 +461,7 @@ void WarehouseManager::updateAll(GUI & gui) {
     bool anyRobotWorking = false;
 
     for (auto& r : robots) {
-        r.update();
+        r.update(globalTable, warehouseMap, systemTick);
         if (r.cellStepCompleted) anyRobotLogicStepped = true;
         if (r.status == RobotStatus::LOADING || r.status == RobotStatus::UNLOADING || r.status == RobotStatus::RETURNING_BUFFER) {
             anyRobotWorking = true;

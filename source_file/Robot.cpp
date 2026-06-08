@@ -37,9 +37,9 @@ void Robot::setPath(const std::vector<Point>& newPath) {
     }
 }
 /**
-* @brief Robot 的核心更新函数，负责处理移动、装卸货逻辑以及视觉坐标的平滑插值（全面免疫死锁优化版）
+* @brief Robot 的核心更新函数，负责处理移动、装卸货逻辑以及视觉坐标的平滑插值（全面免疫死锁+时空表联动优化版）
 */
-void Robot::update() {
+void Robot::update(ReservationTable& table, const Map& map, int currentT) {
     cellStepCompleted = false; // 每帧开始前重置单格跨越完成信号
 
     if (allRobots == nullptr) return;
@@ -80,8 +80,8 @@ void Robot::update() {
     }
 
     // ====================================================================
-// 🌟【完美终结版】：破除帧内时序错位 + 彻底消除穿模硬核优化
-// ====================================================================
+    // 🌟【补回的核心：死锁探测雷达】：破除帧内时序错位 + 彻底消除穿模硬核优化
+    // ====================================================================
     bool headOnDeadlockDetected = false;
     Robot* deadlockedPartner = nullptr;
 
@@ -114,33 +114,89 @@ void Robot::update() {
         }
     }
 
-    // 🌟【死锁自愈核心】：利用 ID 破除两车对称硬锁
+    // ====================================================================
+    // 🌟【死锁自愈核心】：利用 ID 破除两车对称硬锁（完美适配时空表版）
+    // ====================================================================
     if (headOnDeadlockDetected && deadlockedPartner != nullptr) {
-        if (this->id > deadlockedPartner->id) {
-            // 逼大让小：我是高 ID 车，我无条件退让
-            this->pathQueue.clear();          // 1. 轰碎自己后续的所有路径
-            this->moveProgress = 0.0f;        // 2. 动画进度归零，退回己方格子中心
-            this->realX = static_cast<float>(currentPos.x);
-            this->realY = static_cast<float>(currentPos.y);
 
-            // 3. 强行抛出格点完成信号，逼迫上游 WMS 在下一帧为我【重新寻路绕道】
-            this->cellStepCompleted = true;
-            return;                           // 闪退本帧，腾出物理和逻辑空间
+        // 1. 无论高低 ID，两车都立刻将平滑移动进度归零，安全回弹退到各自的格子中心
+        this->moveProgress = 0.0f;
+        this->realX = static_cast<float>(currentPos.x);
+        this->realY = static_cast<float>(currentPos.y);
+
+        // 2. 【核心平替】：在清空队列前，利用 back() 紧急抓取这辆车原本的目的地
+        Point finalDestination = this->pathQueue.back();
+
+        // 3. 【时空表自愈】：彻底擦除这辆车在全局时空表里遗留的“旧未来路径”，防止留下幽灵占位
+        for (int i = 0; i < pathQueue.size(); ++i) {
+            int futureT = currentT + 1 + i;
+            TimePoint oldPoint = { pathQueue[i].x, pathQueue[i].y, futureT };
+            table.vertexReservations.erase(oldPoint); // 擦除格点未来占领
+        }
+
+        // 4. 轰碎本地后续路径，解除旧羁绊
+        this->pathQueue.clear();
+
+        if (this->id > deadlockedPartner->id) {
+            // 逼大让小：我是高 ID 车，我执行【原地即时重寻路】绕行
+
+            // 先把自己当前屁股底下的格子在当前时刻锁死，确保低 ID 车规划时能看到我停在这
+            TimePoint lockCurrent = { currentPos.x, currentPos.y, currentT };
+            table.vertexReservations[lockCurrent] = this->id;
+
+            // 💡 核心：直接调用你的 Router 重新寻路！传入刚才抓取的终点，时间戳为下一秒 (currentT + 1)
+            std::vector<Point> newPath = Router::getPath(currentPos, finalDestination, map, table, this->id, currentT + 1);
+
+            if (!newPath.empty()) {
+                this->pathQueue = newPath;
+                // 将新规划出来的避让路径重新写回全局时空表
+                for (int i = 0; i < newPath.size(); ++i) {
+                    TimePoint newPoint = { newPath[i].x, newPath[i].y, currentT + 1 + i };
+                    table.vertexReservations[newPoint] = this->id;
+                }
+                visualBlocked = false;
+            }
+            else {
+                // 如果侧方大干道被别人堵死，连变道绕行的空间都没了，则被迫原地多锁几帧未来时间
+                for (int dt = 1; dt <= 3; ++dt) {
+                    TimePoint futureLock = { currentPos.x, currentPos.y, currentT + dt };
+                    table.vertexReservations[futureLock] = this->id;
+                }
+                visualBlocked = true;
+            }
+
+            this->cellStepCompleted = true; // 强行抛出完成信号，告知上游调度系统状态已变
+            return; // 闪退本帧，腾出逻辑空间
         }
         else {
-            // 🛠️【终极修复】：我是低 ID 车
-            // 此时高 ID 车已经执行退让并闪回了它的格子中心（moveProgress=0）。
-            // 如果我死死钉在原地（比如原来的 moveProgress=0.8），在画面上就会显得我直接“插”进了对方身体里。
-            // 解决方案：低 ID 车在这一帧也必须把动画进度无条件归零，优雅地退回自己的格子中心！保持两车安全的视觉间距！
-            this->moveProgress = 0.0f;
-            this->realX = static_cast<float>(currentPos.x);
-            this->realY = static_cast<float>(currentPos.y);
-            visualBlocked = true;
+            // 🛠️ 我是低 ID 车：原地坚守，在时空表里筑起一道“未来高墙”
+            // 向未来高调锁定当前格子（比如强行锁定 5 个时间步），逼迫高 ID 车重寻路时必须选择变道绕行
+            for (int dt = 0; dt < 5; ++dt) {
+                TimePoint persistentLock = { currentPos.x, currentPos.y, currentT + dt };
+                table.vertexReservations[persistentLock] = this->id;
+            }
+
+            // 低 ID 车也可以尝试即时重塑路径（看能不能直接接通）
+            std::vector<Point> newPath = Router::getPath(currentPos, finalDestination, map, table, this->id, currentT + 1);
+            if (!newPath.empty()) {
+                this->pathQueue = newPath;
+                for (int i = 0; i < newPath.size(); ++i) {
+                    TimePoint newPoint = { newPath[i].x, newPath[i].y, currentT + 1 + i };
+                    table.vertexReservations[newPoint] = this->id;
+                }
+            }
+            visualBlocked = true; // 本帧暂时挂起驻留
         }
     }
 
     if (moveCooldown > 0) {
         moveCooldown--;
+        return;
+    }
+
+    // 如果前方因为追尾等普通原因被视觉挂起，直接拦截，不推进度条
+    if (visualBlocked) {
+        currentSpeed = 0.0f;
         return;
     }
 

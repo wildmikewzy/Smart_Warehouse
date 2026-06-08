@@ -2,7 +2,7 @@
 #pragma once
 #include "common.h"
 #include <vector>
-
+#include "Router.h"
 // 机器人类
 class Robot {
 public:
@@ -10,7 +10,7 @@ public:
     Robot(int _id, Point startPos);
 
     void setPath(const std::vector<Point>& newPath);        // 设置路径函数，传入新的路径数据
-    void update();  // 更新函数，主函数中调用
+    void update(ReservationTable& table, const Map& map, int currentT);
 
     static std::vector<Robot*>* allRobots;      // 静态机器人列表
     static void setRobotList(std::vector<Robot*>* list);
