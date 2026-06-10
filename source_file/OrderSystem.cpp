@@ -11,40 +11,85 @@ OrderSystem::OrderSystem()
 }
 
 /**
- * @brief 随机订单动态生成机制算法（具备时空解耦与自旋去重特性）
+ * @brief 随机订单动态生成机制算法（具备时空解耦、概率加权与自旋去重特性）
  * @param validShelfStationIds 当前仿真场景中所有合法可选的货架物理拓扑站点 ID 集合
  * @note 1. 执行前置安全性空检查；
- * 2. 引入自旋锁判定式去重机制，防止同一物理货架并发产生多个物料流转需求；
- * 3. 依据货架拓扑空间坐标区域，执行物料类型（SKU）的强约束硬绑定；
- * 4. 维护全局自增唯一订单主键。
+ * 2. 预先对场景内的货架进行 ABC 分类归堆；
+ * 3. 引入按比例加权概率引擎（A类60%, B类30%, C类10%），倒逼物料流转需求分布；
+ * 4. 结合自旋锁判定式去重机制，防止同一物理货架并发产生多个物料流转需求；
+ * 5. 维护全局自增唯一订单主键。
  */
 void OrderSystem::generateRandomOrder(const std::vector<int>& validShelfStationIds) {
     // ----------------------------------------------------------------
-    // 1. 输入有效性安全拦截
+    // 1. 输入有效性安全拦截与货架空间分类预处理
     // ----------------------------------------------------------------
     if (validShelfStationIds.empty()) {
         return;
     }
 
-    // 声明基于 C++11 标准的均匀分布算子，用于在合法货架集合范围内等概率抓取物理站点
-    std::uniform_int_distribution<size_t> stationDist(0, validShelfStationIds.size() - 1);
+    // 局部容器：分类存储当前大盘中合法的各类货架 ID
+    std::vector<int> shelfA;
+    std::vector<int> shelfB;
+    std::vector<int> shelfC;
+
+    for (int id : validShelfStationIds) {
+        if ((id >= 52 && id <= 58) || (id >= 63 && id <= 71) || (id>=73 && id<=96)) {
+            // 区域类型 A：高热度橙色货架区
+            shelfA.push_back(id);
+        }
+        else if ((id >= 1 && id <=5) || (id >= 9 && id <= 16) || (id >= 22 && id <= 25)) {
+            // 区域类型 C：边缘低频灰色货架区
+            shelfC.push_back(id);
+        }
+        else {
+            // 区域类型 B：标称标准蓝色货架区
+            shelfB.push_back(id);
+        }
+    }
+
+    // 声明基于 C++11 标准的百份比均匀分布算子 [0, 99]
+    std::uniform_int_distribution<int> percentageDist(0, 99);
 
     int chosenStationId = -1;
+    int chosenSkuIndex = 1; // 默认为 B 类（离散索引 1）
     bool isDuplicate = true;
-    int attempts = 0; // 自旋深度保护计数器，防止在极端满载任务池下发生死循环
+    int attempts = 0;       // 自旋深度保护计数器，防止在极端满载任务池下发生死循环
 
     // ----------------------------------------------------------------
-    // 2. 自旋式多重任务空间互斥去重算法
+    // 2. 概率加权驱动与自旋式多重任务空间互斥去重算法
     // ----------------------------------------------------------------
     while (isDuplicate && attempts < 15) {
-        // 步骤 2.1：利用随机数引擎提取候选物理站点 ID
-        chosenStationId = validShelfStationIds[stationDist(rng)];
         isDuplicate = false;
         attempts++;
 
+        // 步骤 2.1：概率空间切片拦截（A类60%[0-59]，B类30%[60-89]，C类10%[90-99]）
+        int dice = percentageDist(rng);
+
+        if (dice < 60) {
+            // 命中 A 类物料需求流
+            if (shelfA.empty()) { isDuplicate = true; continue; } // 防御性保护，防止该区域无空闲货架
+            std::uniform_int_distribution<size_t> indexDist(0, shelfA.size() - 1);
+            chosenStationId = shelfA[indexDist(rng)];
+            chosenSkuIndex = 0;
+        }
+        else if (dice < 90) {
+            // 命中 B 类物料需求流
+            if (shelfB.empty()) { isDuplicate = true; continue; }
+            std::uniform_int_distribution<size_t> indexDist(0, shelfB.size() - 1);
+            chosenStationId = shelfB[indexDist(rng)];
+            chosenSkuIndex = 1;
+        }
+        else {
+            // 命中 C 类物料需求流
+            if (shelfC.empty()) { isDuplicate = true; continue; }
+            std::uniform_int_distribution<size_t> indexDist(0, shelfC.size() - 1);
+            chosenStationId = shelfC[indexDist(rng)];
+            chosenSkuIndex = 2;
+        }
+
         // 步骤 2.2：遍历全局活跃任务大盘（activeOrders），检查该货架是否已有未履行的订单
         for (const auto& existingOrder : activeOrders) {
-            // 核心锁闭机制：若目标货架存在仍处于 WAITING（等待分配）或 PROCESSING（执行中）的任务，
+            // 核心锁闭机制：若目标货架存在仍处于 WAITING 或 PROCESSING 的任务，
             // 则判定触发资源占用冲突阻断，终止后续分配，准备执行下一轮自旋探测。
             if (existingOrder.targetStationId == chosenStationId) {
                 isDuplicate = true;
@@ -56,8 +101,7 @@ void OrderSystem::generateRandomOrder(const std::vector<int>& validShelfStationI
     // ----------------------------------------------------------------
     // 3. 边界资源耗尽软拦截防御
     // ----------------------------------------------------------------
-    // 若达到最大自旋尝试深度（15次）仍未筛选出纯净空闲货架（说明当前大部分可用货架均在跑任务），
-    // 算法执行防御性软拦截返回，放弃本帧生成，有效规避多线程任务主调度引擎出现时钟锁锁闭死锁风险。
+    // 若达到最大自旋尝试深度仍未筛选出空闲货架，放弃本帧生成，有效规避时钟锁锁闭死锁风险
     if (isDuplicate) {
         return;
     }
@@ -69,21 +113,8 @@ void OrderSystem::generateRandomOrder(const std::vector<int>& validShelfStationI
     order.orderId = nextOrderId++; // 全局单调递增唯一订单主键注入
     order.targetStationId = chosenStationId;
 
-    // 核心映射机制：依据物理货架在仓储大盘中的绝对拓扑区域划分，强解耦并赋作物料分类约束
-    if ((chosenStationId >= 52 && chosenStationId <= 60) || (chosenStationId >= 63 && chosenStationId <= 96)) {
-        // 区域类型 A：高热度橙色货架区 -> 刚性绑定 A 类物料（离散索引 0）
-        order.sku = static_cast<SKUType>(0);
-    }
-    else if ((chosenStationId >= 1 && chosenStationId <= 6) ||
-        (chosenStationId >= 13 && chosenStationId <= 16) ||
-        (chosenStationId >= 25 && chosenStationId <= 30)) {
-        // 区域类型 C：边缘低频灰色货架区 -> 刚性绑定 C 类物料（离散索引 2）
-        order.sku = static_cast<SKUType>(2);
-    }
-    else {
-        // 区域类型 B：标称标准蓝色货架区 -> 刚性绑定 B 类物料（离散索引 1）
-        order.sku = static_cast<SKUType>(1);
-    }
+    // 直接注入步骤 2.1 中由概率决定的物料类型，保证概率分布与货架物理属性的工程闭环
+    order.sku = static_cast<SKUType>(chosenSkuIndex);
 
     // 步骤 4.1：将订单状态初始化标记为挂起待分配（WAITING）
     order.status = OrderStatus::WAITING;
